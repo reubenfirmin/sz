@@ -9,7 +9,7 @@ import kotlin.native.concurrent.*
  * @param numWorkers how many threads to manage
  * @param sleepTime how long to sleep (microseconds) between grooming when waiting for a worker to become available
  */
-class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
+class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
     private val workers = mutableListOf<Worker>()
     private val busy = mutableListOf<Job<P, R>>()
 
@@ -24,8 +24,8 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
      * NOTE that these results are NOT directly associated with this path - they are from previously submitted and now
      * complete jobs.
      */
-    fun execute(param: P, resultTransformer: (P, R) -> WorkerPool.Result, task: (P) -> R): List<Result> {
-        val results = mutableListOf<Result>() // TODO pass in
+    fun execute(param: P, resultTransformer: (P, R) -> S, task: (P) -> R): List<S> {
+        val results = mutableListOf<S>() // TODO pass in
         while (workers.size == 0) {
             consumeBusy(results, resultTransformer)
             if (workers.size == 0) {
@@ -43,7 +43,7 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     /**
      * Obtain results from any remaining workers, optionally terminating.
      */
-    fun drain(terminate: Boolean, results: MutableList<Result>, resultTransformer: (P, R) -> Result): Boolean {
+    fun drain(terminate: Boolean, results: MutableList<S>, resultTransformer: (P, R) -> S): Boolean {
         var found = false
         while(busy.isNotEmpty()) {
             consumeBusy(results, resultTransformer)
@@ -80,7 +80,7 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     /**
      * Groom the current jobs
      */
-    private fun consumeBusy(results: MutableList<Result>, resultTransformer: (P, R) -> Result): List<Result> {
+    private fun consumeBusy(results: MutableList<S>, resultTransformer: (P, R) -> S): List<S> {
         val iterator = busy.iterator()
         while (iterator.hasNext()) {
             val job = iterator.next()
@@ -97,6 +97,4 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     }
 
     data class Job<T, S>(val param: T, val future: Future<S>, val workerToReturn: Worker)
-
-    data class Result(val param: String, val size: Long, val otherPaths: List<String>)
 }

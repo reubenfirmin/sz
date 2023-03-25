@@ -25,13 +25,13 @@ fun main(args: Array<String>) {
         100
     }
 
-    val workers = WorkerPool<String, Pair<Long, List<String>>>(threads, sleepTime)
+    val workers = WorkerPool<String, Pair<Long, List<String>>, Result>(threads, sleepTime)
 
     val results = mutableMapOf<String, Long>()
 
     submitAndCollect(dir, workers, results)
     // keep iterating for results until there's nothing running
-    val resultQueue = mutableListOf<WorkerPool.Result>()
+    val resultQueue = mutableListOf<Result>()
     // TODO producer consumer with a shared pool? need to add thread safety back if so
     while (workers.drain(false, resultQueue, ::resultTransformer)) {
         resultQueue.forEach { result ->
@@ -68,10 +68,11 @@ fun main(args: Array<String>) {
         }
 }
 
-// TODO genercize Result, move here
-fun resultTransformer(path: String, result: Pair<Long, List<String>>) = WorkerPool.Result(path, result.first, result.second)
+fun resultTransformer(path: String, result: Pair<Long, List<String>>) = Result(path, result.first, result.second)
 
-fun submitAndCollect(path: String, workers: WorkerPool<String, Pair<Long, List<String>>>, resultCollector: MutableMap<String, Long>) {
+data class Result(val param: String, val size: Long, val otherPaths: List<String>)
+
+fun submitAndCollect(path: String, workers: WorkerPool<String, Pair<Long, List<String>>, Result>, resultCollector: MutableMap<String, Long>) {
     val results = workers.execute(path, ::resultTransformer, ::processDirectory)
     for (result in results) {
         if (resultCollector.containsKey(result.param)) {
