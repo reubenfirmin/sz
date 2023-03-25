@@ -31,8 +31,14 @@ Formatting options:
 
 Examples:
 
-./sz /tmp --human 
-./sz -v --threads 50 /tmp -h  
+`./sz /tmp --human`
+`./sz -v --threads 50 /tmp -h`
+
+Note that if you pipe to less, by default the ansi escape codes will show, which will be ugly. So you can either do:
+
+`./sz -c / | less`
+or
+`./sz / | less -r`
 
 ## Status
 
