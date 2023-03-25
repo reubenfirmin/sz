@@ -6,6 +6,9 @@ import platform.linux.getmntent
 import platform.linux.setmntent
 import platform.posix.*
 
+/**
+ * Various POSIX and system related helpers.
+ */
 object IOHelpers {
 
     val ESC = Char(27)

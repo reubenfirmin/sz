@@ -31,7 +31,11 @@ kotlin {
         }
     }
     sourceSets {
-        val szMain by getting
+        val szMain by getting {
+            dependencies {
+                implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
+            }
+        }
         val szTest by getting
     }
 

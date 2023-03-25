@@ -4,10 +4,16 @@ import io.IOHelpers.isDirectory
 import io.IOHelpers.isFile
 import io.IOHelpers.printErr
 import io.IOHelpers.printError
+import io.IOHelpers.statFile
 import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
+import kotlinx.cli.ArgParser
+import kotlinx.cli.ArgType
+import kotlinx.cli.ArgType.*
+import kotlinx.cli.default
 import platform.posix.*
 import view.Reporter
+import kotlin.String
 
 const val DEBUG = false
 
@@ -19,32 +25,19 @@ private val mounts = getMounts()
 private var device = ""
 
 fun main(args: Array<String>) {
+    val parser = ArgParser("sz")
+    val threads by parser.option(Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
+    val pause by parser.option(Int, shortName = "pause", description = "Microseconds to pause when waiting for workers").default(100)
+    val dir by parser.argument(ArgType.String, description = "Directory to analyze")
 
-    // TODO use arg parsing library
-    if (args.isEmpty()) {
-        printErr("Please specify a device or a directory to scan from")
-        exit(1)
-    }
-
-    val dir = args[0]
-    val threads = if (args.size > 1) {
-        args[1].toInt()
-    } else {
-        50
-    }
-    val sleepTime = if (args.size > 2) {
-        args[2].toInt()
-    } else {
-        100
-    }
-
+    parser.parse(args)
     device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
 
     // to avoid unnecessary allocations, we pass these down and write to them in functions
     val resultQueue = mutableListOf<Result>() // queue of results we have yet to process
     val results = mutableMapOf<String, Long>() // the final output
 
-    val workers = WorkerPool<String, Result>(threads, sleepTime)
+    val workers = WorkerPool<String, Result>(threads, pause)
 
     // initialize the scan on the top level dir
     submitAndCollect(dir, workers, results)

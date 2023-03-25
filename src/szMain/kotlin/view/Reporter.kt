@@ -11,7 +11,7 @@ class Reporter(val dir: String, val results: Map<String, Long>) {
         println("$dir total size: $fullSize")
 
         val onePercent = fullSize / 100.0
-        println("Entries that consume at least 1% of space in this folder")
+        println("Entries that consume at least 1% of space in this path")
         println("---------------------------------------------------------")
         results.entries
             .sortedByDescending { it.value }
