@@ -43,14 +43,14 @@ fun main(args: Array<String>) {
     val workers = WorkerPool<String, Result>(threads, pause)
 
     // initialize the scan on the top level dir
-    submitAndCollect(dir, workers, results)
+    submit(dir, workers)
 
     // keep iterating for results (and submitting new jobs) until there's nothing running
     while (workers.sip(resultQueue)) {
         resultQueue.forEach { result ->
             results[result.path] = result.size
             result.otherPaths.forEach { path ->
-                submitAndCollect(path, workers, results)
+                submit(path, workers)
             }
         }
         resultQueue.clear()
@@ -70,10 +70,9 @@ fun main(args: Array<String>) {
 }
 
 /**
- * Submit processing of a path to the worker pool, and collect results. Doesn't block on jobs; collects any results
- * that have become available, not necessarily associated with this path.
+ * Submit processing of a path to the worker pool. Blocks until a worker becomes available.
  */
-fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCollector: MutableMap<String, Long>) {
+fun submit(path: String, workers: WorkerPool<String, Result>) {
     // don't process virtual paths that are in our blacklist
     if (path in blacklist) {
         return
@@ -86,16 +85,7 @@ fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCo
         }
         return
     }
-    val results = workers.execute(path, ::processDirectory)
-    for (result in results) {
-        if (DEBUG && resultCollector.containsKey(result.path)) {
-            printError("${result.path} was already added(1)")
-        }
-        resultCollector[result.path] = result.size
-        for (otherPath in result.otherPaths) {
-            submitAndCollect(otherPath, workers, resultCollector)
-        }
-    }
+    workers.execute(path, ::processDirectory)
 }
 
 /**

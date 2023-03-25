@@ -3,16 +3,22 @@ import platform.posix.usleep
 import kotlin.native.concurrent.*
 
 /**
- * A pool of workers. This avoids using the queue built into individual workers.
+ * A pool of workers.
  *
- * This pool is not thread safe.
+ * This pool is deliberately not thread safe (to avoid performance penalties from locking). It's intended that you
+ * manage tasks from a single coordinator thread (which otherwise doesn't do any real work.)
+ *
  * @param numWorkers how many threads to manage
  * @param sleepTime how long to sleep (microseconds) between grooming when waiting for a worker to become available
  */
 class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     // TODO potential optimization: store workers in an array, and booleans in a shadow array indicating busy / available
+    // workers that are available to run something
     private val workers = ArrayList<Worker>(numWorkers)
+    // workers that are busy doing something
     private val busy = ArrayList<Job<P, R>>(numWorkers)
+    // temporary stack of results which are ready
+    private val resultsStack = ArrayList<R>(numWorkers)
 
     init {
         for (i in 0..numWorkers) {
@@ -21,24 +27,21 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     }
 
     /**
-     * Submit the specified task; may return results that completed in the meantime, which should be handled.
-     * NOTE that these results are NOT directly associated with this task - they are from previously submitted and now
-     * complete tasks.
+     * Submit the specified task.
      */
-    fun execute(param: P, task: (P) -> R): List<R> {
-        val results = mutableListOf<R>()
+    fun execute(param: P, task: (P) -> R) {
+
         while (workers.size == 0) {
-            consumeBusy(results)
+            consumeBusy(resultsStack)
             if (workers.size == 0) {
                 usleep(sleepTime.toUInt())
             }
         }
-        val worker = next(param) { worker ->
-            worker.execute(TransferMode.SAFE, { param to task }) {
-                it.second(it.first)
-            }
+        val worker = workers.removeFirst()
+        val future = worker.execute(TransferMode.SAFE, { param to task }) {
+            it.second(it.first)
         }
-        return results
+        busy.add(Job(param, future, worker))
     }
 
     /**
@@ -47,6 +50,7 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     fun sip(results: MutableList<R>): Boolean {
         val found = busy.isNotEmpty()
         consumeBusy(results)
+        drainStack(results)
         return found
     }
 
@@ -63,6 +67,7 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
             consumeBusy(results)
             found = true
         }
+        drainStack(results)
         if (terminate) {
             workers.forEach {
                 it.requestTermination()
@@ -73,32 +78,14 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     }
 
     /**
-     * Get the next available worker, and run the specified job once available.
-     */
-    private fun next(param: P, job: (worker: Worker) -> Future<R>): Worker {
-        while (workers.size == 0) {
-            sched_yield()
-        }
-
-        val worker = workers.removeFirstOrNull()
-        if (worker != null) {
-            busy.add(Job(param, job.invoke(worker), worker))
-            return worker
-        }
-
-        // we missed it because of race condition; go around again
-        // TODO timeout
-        return next(param, job)
-    }
-
-    /**
-     * Groom the current jobs.
+     * Groom the current jobs, writing results from any complete jobs into the provided results list. (This modification
+     * of the input avoids unnecessary allocations, and improves performance.)
      */
     private fun consumeBusy(results: MutableList<R>) {
         val iterator = busy.iterator()
         while (iterator.hasNext()) {
             val job = iterator.next()
-            // TODO other states?
+            // TODO other states don't seem to be needed, but for completeness/robustness worth adding
             if (job.future.state == FutureState.COMPUTED) {
                 val result = job.future.result
                 results.add(result)
@@ -106,6 +93,18 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
                 workers.add(job.workerToReturn)
             }
             sched_yield()
+        }
+    }
+
+    /**
+     * Drain the stack of results accumulated from calls to execute.
+     */
+    private fun drainStack(results: MutableList<R>) {
+        val iterator = resultsStack.iterator()
+        while (iterator.hasNext()) {
+            val result = iterator.next()
+            results.add(result)
+            iterator.remove()
         }
     }
 
