@@ -37,6 +37,8 @@ Known issue: the binary size is ridiculously large. Maybe this is just how kotli
 
 Known issue: the code is pretty messy, especially in Main.kt. Refactorings are nigh.
 
+TODO filter for the same device
+
 ## Building
 
 apt install gcc-multilib

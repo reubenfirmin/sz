@@ -41,7 +41,17 @@ class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
     }
 
     /**
-     * Obtain results from any remaining workers, optionally terminating.
+     * Check for results. Returns whether jobs were busy before consuming results.
+     */
+    fun sip(results: MutableList<S>, resultTransformer: (P, R) -> S): Boolean {
+        val found = busy.isNotEmpty()
+        consumeBusy(results, resultTransformer)
+        return found
+    }
+
+    /**
+     * Obtain results from any workers, optionally terminating. Runs until no workers are active. Returns
+     * whether or not it found any running.
      */
     fun drain(terminate: Boolean, results: MutableList<S>, resultTransformer: (P, R) -> S): Boolean {
         var found = false

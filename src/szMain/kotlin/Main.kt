@@ -33,7 +33,7 @@ fun main(args: Array<String>) {
     // keep iterating for results until there's nothing running
     val resultQueue = mutableListOf<Result>()
     // TODO producer consumer with a shared pool? need to add thread safety back if so
-    while (workers.drain(false, resultQueue, ::resultTransformer)) {
+    while (workers.sip(resultQueue, ::resultTransformer)) {
         resultQueue.forEach { result ->
             results[result.param] = result.size
             result.otherPaths.forEach { path ->
