@@ -7,6 +7,7 @@ import platform.posix.*
 
 fun main(args: Array<String>) {
 
+    // TODO use arg parsing library
     if (args.isEmpty()) {
         printErr("Please specify a device or a directory to scan from")
         exit(1)
@@ -16,10 +17,15 @@ fun main(args: Array<String>) {
     val threads = if (args.size > 1) {
         args[1].toInt()
     } else {
-        20
+        50
+    }
+    val sleepTime = if (args.size > 2) {
+        args[2].toInt()
+    } else {
+        100
     }
 
-    val workers = WorkerPool(threads)
+    val workers = WorkerPool(threads, sleepTime)
 
     val results = mutableMapOf<String, Long>()
 
