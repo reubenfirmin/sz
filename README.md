@@ -8,7 +8,7 @@ probably use `du` for, i.e. "what the hell is using all my disk space"?
 It contains the following improvements:
 * It's much faster
 * It skips virtual filesystems like /proc and /sys
-* It skips paths mounted on other devices from the starting path
+* It skips paths mounted on other devices from the starting path (default option)
 * It sorts the output by file size, high to low
 * It (by default) only returns results for directories using at least 1% of all files under the path
 * It won't complain about directories that it doesn't have permission to access; for example, running against / as a regular user will work, but the size will be less than if you run with sudo
