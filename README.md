@@ -19,7 +19,7 @@ files directly within the specific path.
 
 Example:
 
-./sz /tmp 50 4000
+./sz /tmp 50 100
 
 It supplies sane defaults also:
 
@@ -28,7 +28,8 @@ It supplies sane defaults also:
 ## Status
 
 It works, and output matches `du`. With 50 threads and a sleep time of 100 microseconds, it is within the same order of
-magnitude as `du`, although consistently slower. There are plenty of easy pickings still to be had for optimizations.
+magnitude as `du` in terms of performance, although consistently slower. There are plenty of easy pickings still to be had 
+for optimizations.
 
 Known issue: running twice with a high number of threads returns a nonsensical result the second time. 
 
