@@ -26,8 +26,8 @@ Optimization options:
 Formatting options:
 * -v - verbose mode; don't summarize 
 * -vv - extra verbose mode; also including directories that are 0 size
-* -c - turn off ansi escape modes / colors
 * -h - format numbers for humans (1.1G, 2.45M, etc)
+* -c - turn off ansi escape modes / colors when in human mode
 
 Examples:
 
@@ -37,11 +37,13 @@ Examples:
 
 Note that if you pipe to less, by default the ansi escape codes will show, which will be ugly. So you can either do:
 
-`sz -c / | less`
+`sz -c / | expand | less`
 
 or
 
-`sz / | less -r`
+`sz / | expand | less -r`
+
+(Note that the expansions are necessary because less doesn't properly interpret tab characters.) 
 
 ## Status
 
@@ -53,8 +55,14 @@ the skipping optimizations. With those optimizations it can be at least 10x as f
 It is not deeply battle tested or proven to be correct, and so is currently unsuitable for distribution. Extensive
 tests need to be created.
 
+TODOs:
+
 Known issue: running twice with a high number of threads (e.g. 100) returns a nonsensical result the second time, which 
 is a smell. 
+
+Improvement: option to roll up summaries by common directory.
+
+Improvement: better handling of formatting options.
 
 ## Building
 

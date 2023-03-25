@@ -28,10 +28,10 @@ fun main(args: Array<String>) {
     val threads by parser.option(Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
     val pause by parser.option(Int, shortName = "p", fullName = "pause", description = "Microseconds to pause when waiting for workers").default(100)
     val human by parser.option(Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
+    val nocolors by parser.option(Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors (only applies to human mode)").default(false)
     val nosummary by parser.option(Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
     val zeroes by parser.option(Boolean, shortName = "vv", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
     val dir by parser.argument(ArgType.String, description = "Directory to analyze")
-    val nocolors by parser.option(Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors").default(false)
     parser.parse(args)
 
     device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
