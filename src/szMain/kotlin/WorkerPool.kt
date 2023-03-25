@@ -9,7 +9,7 @@ import kotlin.native.concurrent.*
  * @param numWorkers how many threads to manage
  * @param sleepTime how long to sleep (microseconds) between grooming when waiting for a worker to become available
  */
-class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
+class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     private val workers = mutableListOf<Worker>()
     private val busy = mutableListOf<Job<P, R>>()
 
@@ -24,10 +24,10 @@ class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
      * NOTE that these results are NOT directly associated with this path - they are from previously submitted and now
      * complete jobs.
      */
-    fun execute(param: P, resultTransformer: (P, R) -> S, task: (P) -> R): List<S> {
-        val results = mutableListOf<S>() // TODO pass in
+    fun execute(param: P, task: (P) -> R): List<R> {
+        val results = mutableListOf<R>()
         while (workers.size == 0) {
-            consumeBusy(results, resultTransformer)
+            consumeBusy(results)
             if (workers.size == 0) {
                 usleep(sleepTime.toUInt())
             }
@@ -43,9 +43,9 @@ class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
     /**
      * Check for results. Returns whether jobs were busy before consuming results.
      */
-    fun sip(results: MutableList<S>, resultTransformer: (P, R) -> S): Boolean {
+    fun sip(results: MutableList<R>): Boolean {
         val found = busy.isNotEmpty()
-        consumeBusy(results, resultTransformer)
+        consumeBusy(results)
         return found
     }
 
@@ -53,10 +53,10 @@ class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
      * Obtain results from any workers, optionally terminating. Runs until no workers are active. Returns
      * whether or not it found any running.
      */
-    fun drain(terminate: Boolean, results: MutableList<S>, resultTransformer: (P, R) -> S): Boolean {
+    fun drain(terminate: Boolean, results: MutableList<R>): Boolean {
         var found = false
         while(busy.isNotEmpty()) {
-            consumeBusy(results, resultTransformer)
+            consumeBusy(results)
             found = true
         }
         if (terminate) {
@@ -90,20 +90,19 @@ class WorkerPool<P, R, S>(numWorkers: Int, val sleepTime: Int) {
     /**
      * Groom the current jobs
      */
-    private fun consumeBusy(results: MutableList<S>, resultTransformer: (P, R) -> S): List<S> {
+    private fun consumeBusy(results: MutableList<R>) {
         val iterator = busy.iterator()
         while (iterator.hasNext()) {
             val job = iterator.next()
             // TODO other states?
             if (job.future.state == FutureState.COMPUTED) {
                 val result = job.future.result
-                results.add(resultTransformer.invoke(job.param, result))
+                results.add(result)
                 iterator.remove()
                 workers.add(job.workerToReturn)
             }
             sched_yield()
         }
-        return results
     }
 
     data class Job<T, S>(val param: T, val future: Future<S>, val workerToReturn: Worker)

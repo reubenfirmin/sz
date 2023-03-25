@@ -25,7 +25,7 @@ fun main(args: Array<String>) {
         100
     }
 
-    val workers = WorkerPool<String, Pair<Long, List<String>>, Result>(threads, sleepTime)
+    val workers = WorkerPool<String, Result>(threads, sleepTime)
 
     val results = mutableMapOf<String, Long>()
 
@@ -33,7 +33,7 @@ fun main(args: Array<String>) {
     // keep iterating for results until there's nothing running
     val resultQueue = mutableListOf<Result>()
     // TODO producer consumer with a shared pool? need to add thread safety back if so
-    while (workers.sip(resultQueue, ::resultTransformer)) {
+    while (workers.sip(resultQueue)) {
         resultQueue.forEach { result ->
             results[result.param] = result.size
             result.otherPaths.forEach { path ->
@@ -41,10 +41,10 @@ fun main(args: Array<String>) {
             }
         }
         resultQueue.clear()
-
+        sched_yield()
     }
     // drain remaining jobs from the queue
-    workers.drain(true, resultQueue, ::resultTransformer)
+    workers.drain(true, resultQueue)
     // there should be none, because we already drained
     resultQueue.forEach {result ->
         printError("Workers was drained but found $result")
@@ -68,12 +68,10 @@ fun main(args: Array<String>) {
         }
 }
 
-fun resultTransformer(path: String, result: Pair<Long, List<String>>) = Result(path, result.first, result.second)
-
 data class Result(val param: String, val size: Long, val otherPaths: List<String>)
 
-fun submitAndCollect(path: String, workers: WorkerPool<String, Pair<Long, List<String>>, Result>, resultCollector: MutableMap<String, Long>) {
-    val results = workers.execute(path, ::resultTransformer, ::processDirectory)
+fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCollector: MutableMap<String, Long>) {
+    val results = workers.execute(path, ::processDirectory)
     for (result in results) {
         if (resultCollector.containsKey(result.param)) {
             printError("${result.param} was already added(1)")
@@ -88,7 +86,7 @@ fun submitAndCollect(path: String, workers: WorkerPool<String, Pair<Long, List<S
 /**
  * @return size of files in this directory, plus list of paths to subdirectories found
  */
-fun processDirectory(path: String): Pair<Long, List<String>> {
+fun processDirectory(path: String): Result {
     val toIterate = mutableListOf<String>()
     val directory = opendir(path)
     var fileSize = 0L
@@ -112,7 +110,7 @@ fun processDirectory(path: String): Pair<Long, List<String>> {
             closedir(directory)
         }
     }
-    return fileSize to toIterate
+    return Result(path, fileSize, toIterate)
 }
 
 private fun stat.isDirectory() = st_mode and S_IFMT.toUInt() == S_IFDIR.toUInt()
