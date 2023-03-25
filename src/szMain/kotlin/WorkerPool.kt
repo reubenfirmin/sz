@@ -1,7 +1,6 @@
 import platform.posix.sched_yield
 import platform.posix.usleep
 import kotlin.native.concurrent.*
-import kotlin.native.internal.test.worker
 
 /**
  * A pool of workers. This avoids using the queue built into individual workers.
@@ -10,9 +9,9 @@ import kotlin.native.internal.test.worker
  * @param numWorkers how many threads to manage
  * @param sleepTime how long to sleep (microseconds) between grooming when waiting for a worker to become available
  */
-class WorkerPool(numWorkers: Int, val sleepTime: Int) {
+class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     private val workers = mutableListOf<Worker>()
-    private val busy = mutableListOf<Job>()
+    private val busy = mutableListOf<Job<P, R>>()
 
     init {
         for (i in 0..numWorkers) {
@@ -25,17 +24,17 @@ class WorkerPool(numWorkers: Int, val sleepTime: Int) {
      * NOTE that these results are NOT directly associated with this path - they are from previously submitted and now
      * complete jobs.
      */
-    fun execute(fullPath: String): List<Result> {
+    fun execute(param: P, resultTransformer: (P, R) -> WorkerPool.Result, task: (P) -> R): List<Result> {
         val results = mutableListOf<Result>() // TODO pass in
         while (workers.size == 0) {
-            consumeBusy(results)
+            consumeBusy(results, resultTransformer)
             if (workers.size == 0) {
                 usleep(sleepTime.toUInt())
             }
         }
-        val worker = next(fullPath) { worker ->
-            worker.execute(TransferMode.SAFE, { fullPath }) {
-                processDirectory(it)
+        val worker = next(param) { worker ->
+            worker.execute(TransferMode.SAFE, { param to task }) {
+                it.second(it.first)
             }
         }
         return results
@@ -44,10 +43,10 @@ class WorkerPool(numWorkers: Int, val sleepTime: Int) {
     /**
      * Obtain results from any remaining workers, optionally terminating.
      */
-    fun drain(terminate: Boolean, results: MutableList<Result>): Boolean {
+    fun drain(terminate: Boolean, results: MutableList<Result>, resultTransformer: (P, R) -> Result): Boolean {
         var found = false
         while(busy.isNotEmpty()) {
-            consumeBusy(results)
+            consumeBusy(results, resultTransformer)
             found = true
         }
         if (terminate) {
@@ -62,33 +61,33 @@ class WorkerPool(numWorkers: Int, val sleepTime: Int) {
     /**
      * Get the next available worker, and run the specified job once available.
      */
-    private fun next(path: String, job: (worker: Worker) -> Future<Pair<Long, List<String>>>): Worker {
+    private fun next(param: P, job: (worker: Worker) -> Future<R>): Worker {
         while (workers.size == 0) {
             sched_yield()
         }
 
         val worker = workers.removeFirstOrNull()
         if (worker != null) {
-            busy.add(Job(path, job.invoke(worker), worker))
+            busy.add(Job(param, job.invoke(worker), worker))
             return worker
         }
 
         // we missed it because of race condition; go around again
         // TODO timeout
-        return next(path, job)
+        return next(param, job)
     }
 
     /**
      * Groom the current jobs
      */
-    private fun consumeBusy(results: MutableList<Result>): List<Result> {
+    private fun consumeBusy(results: MutableList<Result>, resultTransformer: (P, R) -> Result): List<Result> {
         val iterator = busy.iterator()
         while (iterator.hasNext()) {
             val job = iterator.next()
             // TODO other states?
             if (job.future.state == FutureState.COMPUTED) {
                 val result = job.future.result
-                results.add(Result(job.path, result.first, result.second))
+                results.add(resultTransformer.invoke(job.param, result))
                 iterator.remove()
                 workers.add(job.workerToReturn)
             }
@@ -97,7 +96,7 @@ class WorkerPool(numWorkers: Int, val sleepTime: Int) {
         return results
     }
 
-    data class Job(val path: String, val future: Future<Pair<Long, List<String>>>, val workerToReturn: Worker)
+    data class Job<T, S>(val param: T, val future: Future<S>, val workerToReturn: Worker)
 
-    data class Result(val path: String, val size: Long, val otherPaths: List<String>)
+    data class Result(val param: String, val size: Long, val otherPaths: List<String>)
 }

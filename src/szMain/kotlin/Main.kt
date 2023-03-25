@@ -25,7 +25,7 @@ fun main(args: Array<String>) {
         100
     }
 
-    val workers = WorkerPool(threads, sleepTime)
+    val workers = WorkerPool<String, Pair<Long, List<String>>>(threads, sleepTime)
 
     val results = mutableMapOf<String, Long>()
 
@@ -33,9 +33,9 @@ fun main(args: Array<String>) {
     // keep iterating for results until there's nothing running
     val resultQueue = mutableListOf<WorkerPool.Result>()
     // TODO producer consumer with a shared pool? need to add thread safety back if so
-    while (workers.drain(false, resultQueue)) {
+    while (workers.drain(false, resultQueue, ::resultTransformer)) {
         resultQueue.forEach { result ->
-            results[result.path] = result.size
+            results[result.param] = result.size
             result.otherPaths.forEach { path ->
                 submitAndCollect(path, workers, results)
             }
@@ -44,12 +44,11 @@ fun main(args: Array<String>) {
 
     }
     // drain remaining jobs from the queue
-    workers.drain(true, resultQueue)
+    workers.drain(true, resultQueue, ::resultTransformer)
     // there should be none, because we already drained
     resultQueue.forEach {result ->
         printError("Workers was drained but found $result")
     }
-
 
     // TODO split into reporter
     println("$dir files size: ${results[dir]}")
@@ -69,15 +68,17 @@ fun main(args: Array<String>) {
         }
 }
 
-fun submitAndCollect(path: String, workers: WorkerPool, resultCollector: MutableMap<String, Long>) {
-    val results = workers.execute(path)
+// TODO genercize Result, move here
+fun resultTransformer(path: String, result: Pair<Long, List<String>>) = WorkerPool.Result(path, result.first, result.second)
+
+fun submitAndCollect(path: String, workers: WorkerPool<String, Pair<Long, List<String>>>, resultCollector: MutableMap<String, Long>) {
+    val results = workers.execute(path, ::resultTransformer, ::processDirectory)
     for (result in results) {
-        if (resultCollector.containsKey(result.path)) {
-            printError("${result.path} was already added(1)")
+        if (resultCollector.containsKey(result.param)) {
+            printError("${result.param} was already added(1)")
         }
-        resultCollector[result.path] = result.size
+        resultCollector[result.param] = result.size
         for (otherPath in result.otherPaths) {
-            //println(">> $otherPath")
             submitAndCollect(otherPath, workers, resultCollector)
         }
     }
