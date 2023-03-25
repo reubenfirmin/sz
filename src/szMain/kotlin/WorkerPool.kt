@@ -1,15 +1,15 @@
-import kotlinx.atomicfu.AtomicInt
-import kotlinx.atomicfu.locks.reentrantLock
-import kotlinx.atomicfu.locks.withLock
 import platform.posix.sched_yield
 import platform.posix.usleep
 import kotlin.native.concurrent.*
 
+/**
+ * A pool of workers. This avoids using the queue built into individual workers.
+ *
+ * This pool is not thread safe.
+ */
 class WorkerPool(numWorkers: Int) {
     private val workers = mutableListOf<Worker>()
-    private val results = mutableMapOf<Int, Future<Long>>()
     private val busy = mutableListOf<Job>()
-    private val workerLock = reentrantLock()
 
     init {
         for (i in 0..numWorkers) {
@@ -21,13 +21,13 @@ class WorkerPool(numWorkers: Int) {
         while (workers.size == 0) {
             sched_yield()
         }
-        workerLock.withLock {
-            val worker = workers.removeFirstOrNull()
-            if (worker != null) {
-                busy.add(Job(path, job.invoke(worker), worker))
-                return worker
-            }
+
+        val worker = workers.removeFirstOrNull()
+        if (worker != null) {
+            busy.add(Job(path, job.invoke(worker), worker))
+            return worker
         }
+
         // we missed it because of race condition; go around again
         // TODO timeout
         return next(path, job)
@@ -62,14 +62,12 @@ class WorkerPool(numWorkers: Int) {
         val iterator = busy.iterator()
         while (iterator.hasNext()) {
             val job = iterator.next()
-            // TODO other states
+            // TODO other states?
             if (job.future.state == FutureState.COMPUTED) {
-                workerLock.withLock {
-                    val result = job.future.result
-                    results.add(Result(job.path, result.first, result.second))
-                    iterator.remove()
-                    workers.add(job.workerToReturn)
-                }
+                val result = job.future.result
+                results.add(Result(job.path, result.first, result.second))
+                iterator.remove()
+                workers.add(job.workerToReturn)
             }
             sched_yield()
         }

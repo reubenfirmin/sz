@@ -17,6 +17,14 @@ object IOHelpers {
     }
 
     /**
+     * Print error to stdout, with ansi coloring of "ERROR".
+     */
+    fun printError(message: Any) {
+        print(ansiFg(Color.HIGHLIGHT_1, "ERROR"))
+        println(message)
+    }
+
+    /**
      * Replace kotlin's impl of readLine, which is broken on native (https://youtrack.jetbrains.com/issue/KT-39495)
      * TODO consider using readln() instead (added in 1.6) (test)
      * @return null if we hit EOF

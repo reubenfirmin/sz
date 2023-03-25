@@ -23,11 +23,6 @@ kotlin {
 
     szTarget.apply {
         compilations["main"].enableEndorsedLibs = false
-        compilations["main"].cinterops {
-            val ncurses by creating {
-
-            }
-        }
 
         binaries {
             executable(listOf(DEBUG, RELEASE)) {
@@ -36,11 +31,7 @@ kotlin {
         }
     }
     sourceSets {
-        val szMain by getting {
-            dependencies {
-                implementation("org.jetbrains.kotlinx:atomicfu:0.16.2")
-            }
-        }
+        val szMain by getting
         val szTest by getting
     }
 

@@ -1,11 +1,9 @@
 import io.Color
 import io.IOHelpers.ansiFg
-import kotlinx.atomicfu.*
 import io.IOHelpers.printErr
+import io.IOHelpers.printError
 import kotlinx.cinterop.*
 import platform.posix.*
-
-val workers = WorkerPool(20) // TODO tuneable
 
 fun main(args: Array<String>) {
 
@@ -15,33 +13,39 @@ fun main(args: Array<String>) {
     }
 
     val dir = args[0].removeSuffix("/")
+    val threads = if (args.size > 1) {
+        args[1].toInt()
+    } else {
+        20
+    }
+
+    val workers = WorkerPool(threads)
 
     val results = mutableMapOf<String, Long>()
-    val res = submitAndCollect(dir, results)
-    val resultQueue = mutableListOf<WorkerPool.Result>()
 
+    submitAndCollect(dir, workers, results)
     // keep iterating for results until there's nothing running
+    val resultQueue = mutableListOf<WorkerPool.Result>()
+    // TODO producer consumer with a shared pool? need to add thread safety back if so
     while (workers.drain(false, resultQueue)) {
         resultQueue.forEach { result ->
-//            println("Adding ${result} in top")
             results[result.path] = result.size
             result.otherPaths.forEach { path ->
-                submitAndCollect(path, results)
+                submitAndCollect(path, workers, results)
             }
         }
         resultQueue.clear()
+
     }
+    // drain remaining jobs from the queue
     workers.drain(true, resultQueue)
+    // there should be none, because we already drained
     resultQueue.forEach {result ->
-  //      println("Adding ${result} in middle")
-        results[result.path] = result.size
-        if (result.otherPaths.isNotEmpty()) {
-            print(ansiFg(Color.HIGHLIGHT_1, "ERROR"))
-            println(" ${result.path} ${result.otherPaths.size}")
-        }
+        printError("Workers was drained but found $result")
     }
 
 
+    // TODO split into reporter
     println("$dir files size: ${results[dir]}")
     val fullSize = results.entries.sumOf { it.value }
     println("$dir total size: $fullSize")
@@ -59,15 +63,16 @@ fun main(args: Array<String>) {
         }
 }
 
-fun submitAndCollect(path: String, resultCollector: MutableMap<String, Long>) {
-//    println("calling execute on $path")
+fun submitAndCollect(path: String, workers: WorkerPool, resultCollector: MutableMap<String, Long>) {
     val results = workers.execute(path)
     for (result in results) {
-//        println("Adding ${result} in bottom")
+        if (resultCollector.containsKey(result.path)) {
+            printError("${result.path} was already added(1)")
+        }
         resultCollector[result.path] = result.size
         for (otherPath in result.otherPaths) {
             //println(">> $otherPath")
-            submitAndCollect(otherPath, resultCollector)
+            submitAndCollect(otherPath, workers, resultCollector)
         }
     }
 }
