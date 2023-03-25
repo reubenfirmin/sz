@@ -2,16 +2,19 @@
 
 ## About
 
-An experiment with parallelization using Kotlin native. This is similar to `du`, except that it produces output more 
-specifically targeted to the question "what the hell is using up my disk space?"
+This is an improved version of `du`, written with Kotlin Native. It's intended to quickly answer the question that most of us
+probably use `du` for, i.e. "what the hell is using all my disk space"?
 
-Given a path, and optionally number of threads, it will return all sub-paths that consume more than 1% of the space
-within the directory hierarchy under the path. It does not list individual files, but does provide the total size of 
-files directly within the specific path. Output is sorted, and really pretty!
+It contains the following improvements:
+* It's much faster
+* It skips virtual filesystems like /proc and /sys
+* It skips paths mounted on other devices from the starting path
+* It sorts the output by file size, high to low
+* It only returns results for directories using at least 1% of all files under the path  
 
 ## Running
 
-./sz [dir] [threads] [sleepTime]
+./sz {dir} [threads] [sleepTime]
 
 * dir - directory to scan
 * threads - how many threads to execute when recursing the tree
@@ -34,8 +37,6 @@ Known issue: running twice with a high number of threads returns a nonsensical r
 Known issue: the binary size is ridiculously large. Maybe this is just how kotlin native is?
 
 Known issue: the code is pretty messy, especially in Main.kt. Refactorings are nigh.
-
-TODO filter for the same device
 
 ## Building
 

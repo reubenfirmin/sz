@@ -10,8 +10,9 @@ import kotlin.native.concurrent.*
  * @param sleepTime how long to sleep (microseconds) between grooming when waiting for a worker to become available
  */
 class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
-    private val workers = mutableListOf<Worker>()
-    private val busy = mutableListOf<Job<P, R>>()
+    // TODO potential optimization: store workers in an array, and booleans in a shadow array indicating busy / available
+    private val workers = ArrayList<Worker>(numWorkers)
+    private val busy = ArrayList<Job<P, R>>(numWorkers)
 
     init {
         for (i in 0..numWorkers) {

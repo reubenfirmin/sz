@@ -1,6 +1,9 @@
 package io
 
 import kotlinx.cinterop.*
+import platform.linux.endmntent
+import platform.linux.getmntent
+import platform.linux.setmntent
 import platform.posix.*
 
 object IOHelpers {
@@ -79,27 +82,79 @@ object IOHelpers {
         return stdout.trim()
     }
 
+    // convert masks to UInt once to avoid repeated ops
+    private val fileTypeBm = S_IFMT.toUInt() // bitmask
+    private val dirBits = S_IFDIR.toUInt()
+    private val fileBits = S_IFREG.toUInt()
+    private val symlinkBits = S_IFLNK.toUInt()
 
-    fun stat.isDirectory() = st_mode and S_IFMT.toUInt() == S_IFDIR.toUInt()
+    fun stat.isDirectory() = st_mode and fileTypeBm == dirBits
 
-    fun stat.isFile() = st_mode and S_IFMT.toUInt() != S_IFDIR.toUInt()
+    fun stat.isFile() = st_mode and fileTypeBm == fileBits
+
+    fun stat.isSymlink() = st_mode and fileTypeBm == symlinkBits
+
+    /**
+     * XXX this is suspect; don't rely on it yet
+     */
+    fun stat.isOnDevice(device: ULong) = st_dev == device
 
     fun dirent.toFileInfo(parentPath: String): Pair<String, stat>? {
         val nameBuf = this.d_name.toKString()
+        // remove trailing null characters
         val name = nameBuf.trimEnd('\u0000')
         if (name != "." && name != "..") {
-            val fullPath = "$parentPath/$name"
+            // File is not available in Kotlin native :(. So, this is a unix path structure (for now). If we really
+            // wanted to support el doze, we could handle at compilation time somehow.
+            val fullPath = "${parentPath.removeSuffix("/")}/$name"
             return fullPath to statFile(fullPath)
         }
         return null
     }
 
+    /**
+     * Return stat info about a file path. This calls lstat; symlinks will be identified as such rather than
+     * dereferenced.
+     */
     fun statFile(path: String) = memScoped {
         val info = alloc<stat>()
-        stat(path, info.ptr)
+        lstat(path, info.ptr)
         info
     }
 
+    /**
+     * Get the system mounts; this returns a map of paths to mounts.
+     */
+    fun getMounts(): Map<String, String> {
+        val mounts = setmntent("/proc/mounts", "r")
+        var res = getmntent(mounts)
+        val result = mutableMapOf<String, String>()
+        while (res != null) {
+            res.pointed.let {
+                result[it.mnt_dir!!.toKString()] = it.mnt_fsname!!.toKString()
+            }
+            res = getmntent(mounts)
+        }
+        endmntent(mounts)
+        return result
+    }
+
+
+    /**
+     * Figure out which mount [dir] is on.
+     */
+    fun findDevice(mounts: Map<String, String>, dir: String): String? {
+        var mount = ""
+        val str = StringBuilder()
+        // find the mount of the starting dir (the longest possible match)
+        for (char in dir) {
+            str.append(char)
+            mounts[str.toString()] ?.let {
+                mount = it
+            }
+        }
+        return mount
+    }
 }
 
 enum class Color(val hex: Int) {

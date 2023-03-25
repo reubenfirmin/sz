@@ -1,5 +1,5 @@
-import io.Color
-import io.IOHelpers.ansiFg
+import io.IOHelpers.findDevice
+import io.IOHelpers.getMounts
 import io.IOHelpers.isDirectory
 import io.IOHelpers.isFile
 import io.IOHelpers.printErr
@@ -7,8 +7,16 @@ import io.IOHelpers.printError
 import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
 import platform.posix.*
+import view.Reporter
 
 const val DEBUG = false
+
+// paths to avoid
+val blacklist = setOf("/proc", "/sys")
+
+// the only device (disk) we'll examine
+private val mounts = getMounts()
+private var device = ""
 
 fun main(args: Array<String>) {
 
@@ -18,7 +26,7 @@ fun main(args: Array<String>) {
         exit(1)
     }
 
-    val dir = args[0].removeSuffix("/")
+    val dir = args[0]
     val threads = if (args.size > 1) {
         args[1].toInt()
     } else {
@@ -30,15 +38,18 @@ fun main(args: Array<String>) {
         100
     }
 
+    device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
+
+    // to avoid unnecessary allocations, we pass these down and write to them in functions
+    val resultQueue = mutableListOf<Result>() // queue of results we have yet to process
+    val results = mutableMapOf<String, Long>() // the final output
+
     val workers = WorkerPool<String, Result>(threads, sleepTime)
 
-    val results = mutableMapOf<String, Long>()
-
+    // initialize the scan on the top level dir
     submitAndCollect(dir, workers, results)
-    // keep iterating for results until there's nothing running
-    val resultQueue = mutableListOf<Result>()
 
-    // TODO submitter/groomer as separate threads? i don't think WorkerPool can be shared
+    // keep iterating for results (and submitting new jobs) until there's nothing running
     while (workers.sip(resultQueue)) {
         resultQueue.forEach { result ->
             results[result.path] = result.size
@@ -58,22 +69,7 @@ fun main(args: Array<String>) {
         }
     }
 
-    // TODO split into reporter
-    println("$dir files size: ${results[dir]}")
-    val fullSize = results.entries.sumOf { it.value }
-    println("$dir total size: $fullSize")
-
-    val onePercent = fullSize / 100.0
-    println("Entries that consume at least 1% of space in this folder")
-    println("---------------------------------------------------------")
-    results.entries
-        .sortedByDescending { it.value }
-        .filter { it.value > onePercent }
-        .forEach {
-            print(ansiFg(Color.HIGHLIGHT_2, it.value.toString()))
-            print("\t")
-            println(ansiFg(Color.HIGHLIGHT_0, it.key))
-        }
+    Reporter(dir, results).report()
 }
 
 /**
@@ -81,6 +77,18 @@ fun main(args: Array<String>) {
  * that have become available, not necessarily associated with this path.
  */
 fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCollector: MutableMap<String, Long>) {
+    // don't process virtual paths that are in our blacklist
+    if (path in blacklist) {
+        return
+    }
+    // if this is a different mount, we'll skip it
+    val mount = mounts[path]
+    if (mount != null && mount != device) {
+        if (DEBUG) {
+            println("Skipping path on different mount $path")
+        }
+        return
+    }
     val results = workers.execute(path, ::processDirectory)
     for (result in results) {
         if (DEBUG && resultCollector.containsKey(result.path)) {
@@ -93,20 +101,11 @@ fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCo
     }
 }
 
-
-/**
- * @param path the directory that was checked
- * @param size the total size in bytes of all files in the directory (not including subdirectory)
- * @param otherPaths other paths found that need to be processed
- */
-data class Result(val path: String, val size: Long, val otherPaths: List<String>)
-
-
 /**
  * @return size of files in this directory, plus list of paths to subdirectories found
  */
 fun processDirectory(path: String): Result {
-    val toIterate = mutableListOf<String>()
+    val subPaths = mutableListOf<String>() // TODO deallocate using shared mem?
     val directory = opendir(path)
     var fileSize = 0L
     if (directory != null) {
@@ -115,10 +114,12 @@ fun processDirectory(path: String): Result {
 
             while (entry != null) {
                 val info = entry.toFileInfo(path)
-                if (info != null) {
+                // TODO change to avoid Pair structure
+                // TODO isOnDevice (st_dev) not working, see slack
+                if (info != null) { //&& info.second.isOnDevice(device)) {
                     if (info.second.isDirectory()) {
                         // indicate that we need to process this dir
-                        toIterate.add(info.first)
+                        subPaths.add(info.first)
                     } else if (info.second.isFile()) {
                         fileSize += info.second.st_size
                     }
@@ -129,5 +130,12 @@ fun processDirectory(path: String): Result {
             closedir(directory)
         }
     }
-    return Result(path, fileSize, toIterate)
+    return Result(path, fileSize, subPaths)
 }
+
+/**
+ * @param path the directory that was checked
+ * @param size the total size in bytes of all files in the directory (not including subdirectory)
+ * @param otherPaths other paths found that need to be processed
+ */
+data class Result(val path: String, val size: Long, val otherPaths: List<String>)
