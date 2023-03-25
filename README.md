@@ -11,7 +11,7 @@ It contains the following improvements:
 * It skips paths mounted on other devices from the starting path
 * It sorts the output by file size, high to low
 * It (by default) only returns results for directories using at least 1% of all files under the path
-* It won't complain about directories it doesn't have permission to access; for example, running against / as a regular user will work, but the size will be less than if you run with sudo
+* It won't complain about directories that it doesn't have permission to access; for example, running against / as a regular user will work, but the size will be less than if you run with sudo
 
 ## Running
 
@@ -31,17 +31,17 @@ Formatting options:
 
 Examples:
 
-`./sz /tmp --human`
+`sz /tmp --human`
 
-`./sz -v --threads 50 /tmp -h`
+`sz -v --threads 50 /tmp -h`
 
 Note that if you pipe to less, by default the ansi escape codes will show, which will be ugly. So you can either do:
 
-`./sz -c / | less`
+`sz -c / | less`
 
 or
 
-`./sz / | less -r`
+`sz / | less -r`
 
 ## Status
 
@@ -60,3 +60,4 @@ is a smell.
 
 apt install gcc-multilib
 ./build.sh
+sudo ./install.sh
