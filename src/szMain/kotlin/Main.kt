@@ -31,6 +31,7 @@ fun main(args: Array<String>) {
     val nosummary by parser.option(Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
     val zeroes by parser.option(Boolean, shortName = "vv", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
     val dir by parser.argument(ArgType.String, description = "Directory to analyze")
+    val nocolors by parser.option(Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors").default(false)
     parser.parse(args)
 
     device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
@@ -65,7 +66,7 @@ fun main(args: Array<String>) {
         }
     }
 
-    Reporter(dir, results, human, nosummary, zeroes).report()
+    Reporter(dir, results, human, nosummary, zeroes, !nocolors).report()
 }
 
 /**

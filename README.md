@@ -26,6 +26,8 @@ Optimization options:
 Formatting options:
 * -v - verbose mode; don't summarize 
 * -vv - extra verbose mode; also including directories that are 0 size
+* -c - turn off ansi escape modes / colors
+* -h - format numbers for humans (1.1G, 2.45M, etc)
 
 Examples:
 
