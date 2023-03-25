@@ -2,9 +2,7 @@ import io.IOHelpers.findDevice
 import io.IOHelpers.getMounts
 import io.IOHelpers.isDirectory
 import io.IOHelpers.isFile
-import io.IOHelpers.printErr
 import io.IOHelpers.printError
-import io.IOHelpers.statFile
 import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
 import kotlinx.cli.ArgParser
@@ -25,12 +23,16 @@ private val mounts = getMounts()
 private var device = ""
 
 fun main(args: Array<String>) {
-    val parser = ArgParser("sz")
-    val threads by parser.option(Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
-    val pause by parser.option(Int, shortName = "pause", description = "Microseconds to pause when waiting for workers").default(100)
-    val dir by parser.argument(ArgType.String, description = "Directory to analyze")
 
+    val parser = ArgParser("sz", useDefaultHelpShortName = false)
+    val threads by parser.option(Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
+    val pause by parser.option(Int, shortName = "p", fullName = "pause", description = "Microseconds to pause when waiting for workers").default(100)
+    val human by parser.option(Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
+    val nosummary by parser.option(Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
+    val zeroes by parser.option(Boolean, shortName = "vv", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
+    val dir by parser.argument(ArgType.String, description = "Directory to analyze")
     parser.parse(args)
+
     device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
 
     // to avoid unnecessary allocations, we pass these down and write to them in functions
@@ -53,6 +55,7 @@ fun main(args: Array<String>) {
         resultQueue.clear()
         sched_yield()
     }
+
     // drain remaining jobs from the queue
     workers.drain(true, resultQueue)
     // there should be none, because we already drained
@@ -62,7 +65,7 @@ fun main(args: Array<String>) {
         }
     }
 
-    Reporter(dir, results).report()
+    Reporter(dir, results, human, nosummary, zeroes).report()
 }
 
 /**
@@ -95,6 +98,12 @@ fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCo
 }
 
 /**
+ * Iterate through the contents of a directory. For each entry:
+ * - if it's a file then add the size
+ * - if it's a directory then keep track of the path
+ *
+ * This function is submitted to workers, and therefore cannot access shared memory.
+ *
  * @return size of files in this directory, plus list of paths to subdirectories found
  */
 fun processDirectory(path: String): Result {
@@ -107,7 +116,6 @@ fun processDirectory(path: String): Result {
 
             while (entry != null) {
                 val info = entry.toFileInfo(path)
-                // TODO change to avoid Pair structure
                 // TODO isOnDevice (st_dev) not working, see slack
                 if (info != null) { //&& info.second.isOnDevice(device)) {
                     if (info.second.isDirectory()) {
@@ -128,7 +136,7 @@ fun processDirectory(path: String): Result {
 
 /**
  * @param path the directory that was checked
- * @param size the total size in bytes of all files in the directory (not including subdirectory)
+ * @param size the total size in bytes of all files in the directory (not including subdirectories)
  * @param otherPaths other paths found that need to be processed
  */
 data class Result(val path: String, val size: Long, val otherPaths: List<String>)

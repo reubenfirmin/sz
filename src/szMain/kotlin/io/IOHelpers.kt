@@ -102,15 +102,20 @@ object IOHelpers {
      */
     fun stat.isOnDevice(device: ULong) = st_dev == device
 
+    /**
+     * Convert a [dirent] (obtained from iterating over [readdir]) to a pair of absolute path, [stat] object
+     */
     fun dirent.toFileInfo(parentPath: String): Pair<String, stat>? {
         val nameBuf = this.d_name.toKString()
-        // remove trailing null characters
+        // remove trailing null characters (which might be there because we're converting from a c array)
+        // TODO this may not be necessary with toKString. Verify
         val name = nameBuf.trimEnd('\u0000')
         if (name != "." && name != "..") {
             // File is not available in Kotlin native :(. So, this is a unix path structure (for now). If we really
             // wanted to support el doze, we could handle at compilation time somehow.
             val fullPath = "${parentPath.removeSuffix("/")}/$name"
-            return fullPath to statFile(fullPath)
+            val st = statFile(fullPath)
+            return fullPath to st
         }
         return null
     }

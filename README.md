@@ -10,7 +10,7 @@ It contains the following improvements:
 * It skips virtual filesystems like /proc and /sys
 * It skips paths mounted on other devices from the starting path
 * It sorts the output by file size, high to low
-* It only returns results for directories using at least 1% of all files under the path
+* It (by default) only returns results for directories using at least 1% of all files under the path
 * It won't complain about directories it doesn't have permission to access; for example, running against / as a regular user will work, but the size will be less than if you run with sudo
 
 ## Running
@@ -19,17 +19,18 @@ It contains the following improvements:
 
 * dir - directory to scan
 
-Options:
+Optimization options:
 * --threads - how many threads to execute when recursing the tree (best option is likely a function of number of cores)
 * --pause - how many microseconds the main thread should pause when waiting for children to finish (best option is likely is a function of the underlying disk hardware)
 
-Example:
+Formatting options:
+* -v - verbose mode; don't summarize 
+* -vv - extra verbose mode; also including directories that are 0 size
 
-./sz /tmp 50 100
+Examples:
 
-It supplies sane defaults also:
-
-./sz /home/you/Downloads 
+./sz /tmp --human 
+./sz -v --threads 50 /tmp -h  
 
 ## Status
 
