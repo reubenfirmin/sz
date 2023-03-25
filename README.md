@@ -7,7 +7,7 @@ specifically targeted to the question "what the hell is using up my disk space?"
 
 Given a path, and optionally number of threads, it will return all sub-paths that consume more than 1% of the space
 within the directory hierarchy under the path. It does not list individual files, but does provide the total size of 
-files directly within the specific path.
+files directly within the specific path. Output is sorted, and really pretty!
 
 ## Running
 
