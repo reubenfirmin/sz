@@ -1,9 +1,14 @@
 import io.Color
 import io.IOHelpers.ansiFg
+import io.IOHelpers.isDirectory
+import io.IOHelpers.isFile
 import io.IOHelpers.printErr
 import io.IOHelpers.printError
+import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
 import platform.posix.*
+
+const val DEBUG = false
 
 fun main(args: Array<String>) {
 
@@ -32,10 +37,11 @@ fun main(args: Array<String>) {
     submitAndCollect(dir, workers, results)
     // keep iterating for results until there's nothing running
     val resultQueue = mutableListOf<Result>()
-    // TODO producer consumer with a shared pool? need to add thread safety back if so
+
+    // TODO submitter/groomer as separate threads? i don't think WorkerPool can be shared
     while (workers.sip(resultQueue)) {
         resultQueue.forEach { result ->
-            results[result.param] = result.size
+            results[result.path] = result.size
             result.otherPaths.forEach { path ->
                 submitAndCollect(path, workers, results)
             }
@@ -46,8 +52,10 @@ fun main(args: Array<String>) {
     // drain remaining jobs from the queue
     workers.drain(true, resultQueue)
     // there should be none, because we already drained
-    resultQueue.forEach {result ->
-        printError("Workers was drained but found $result")
+    if (DEBUG) {
+        resultQueue.forEach { result ->
+            printError("Workers was drained but found $result")
+        }
     }
 
     // TODO split into reporter
@@ -68,20 +76,31 @@ fun main(args: Array<String>) {
         }
 }
 
-data class Result(val param: String, val size: Long, val otherPaths: List<String>)
-
+/**
+ * Submit processing of a path to the worker pool, and collect results. Doesn't block on jobs; collects any results
+ * that have become available, not necessarily associated with this path.
+ */
 fun submitAndCollect(path: String, workers: WorkerPool<String, Result>, resultCollector: MutableMap<String, Long>) {
     val results = workers.execute(path, ::processDirectory)
     for (result in results) {
-        if (resultCollector.containsKey(result.param)) {
-            printError("${result.param} was already added(1)")
+        if (DEBUG && resultCollector.containsKey(result.path)) {
+            printError("${result.path} was already added(1)")
         }
-        resultCollector[result.param] = result.size
+        resultCollector[result.path] = result.size
         for (otherPath in result.otherPaths) {
             submitAndCollect(otherPath, workers, resultCollector)
         }
     }
 }
+
+
+/**
+ * @param path the directory that was checked
+ * @param size the total size in bytes of all files in the directory (not including subdirectory)
+ * @param otherPaths other paths found that need to be processed
+ */
+data class Result(val path: String, val size: Long, val otherPaths: List<String>)
+
 
 /**
  * @return size of files in this directory, plus list of paths to subdirectories found
@@ -111,24 +130,4 @@ fun processDirectory(path: String): Result {
         }
     }
     return Result(path, fileSize, toIterate)
-}
-
-private fun stat.isDirectory() = st_mode and S_IFMT.toUInt() == S_IFDIR.toUInt()
-
-private fun stat.isFile() = st_mode and S_IFMT.toUInt() != S_IFDIR.toUInt()
-
-private fun dirent.toFileInfo(parentPath: String): Pair<String, stat>? {
-    val nameBuf = this.d_name.toKString()
-    val name = nameBuf.trimEnd('\u0000')
-    if (name != "." && name != "..") {
-        val fullPath = "$parentPath/$name"
-        return fullPath to statFile(fullPath)
-    }
-    return null
-}
-
-private fun statFile(path: String) = memScoped {
-    val info = alloc<stat>()
-    stat(path, info.ptr)
-    info
 }

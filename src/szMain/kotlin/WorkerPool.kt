@@ -20,9 +20,9 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     }
 
     /**
-     * Submit the specificed job; may return results that completed in the meantime, which should be handled.
-     * NOTE that these results are NOT directly associated with this path - they are from previously submitted and now
-     * complete jobs.
+     * Submit the specified task; may return results that completed in the meantime, which should be handled.
+     * NOTE that these results are NOT directly associated with this task - they are from previously submitted and now
+     * complete tasks.
      */
     fun execute(param: P, task: (P) -> R): List<R> {
         val results = mutableListOf<R>()
@@ -52,6 +52,9 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     /**
      * Obtain results from any workers, optionally terminating. Runs until no workers are active. Returns
      * whether or not it found any running.
+     *
+     * @param terminate shut down workers if true
+     * @param results list to accumulate results in
      */
     fun drain(terminate: Boolean, results: MutableList<R>): Boolean {
         var found = false
@@ -88,7 +91,7 @@ class WorkerPool<P, R>(numWorkers: Int, val sleepTime: Int) {
     }
 
     /**
-     * Groom the current jobs
+     * Groom the current jobs.
      */
     private fun consumeBusy(results: MutableList<R>) {
         val iterator = busy.iterator()

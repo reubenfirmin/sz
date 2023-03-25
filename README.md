@@ -27,9 +27,7 @@ It supplies sane defaults also:
 
 ## Status
 
-It works, and output matches `du`. With 50 threads and a sleep time of 100 microseconds, it is within the same order of
-magnitude as `du` in terms of performance, although consistently slower. There are plenty of easy pickings still to be had 
-for optimizations.
+It works, output matches `du`, and it is approximately twice as fast as `du`. There is still plenty of room for optimization.
 
 Known issue: running twice with a high number of threads returns a nonsensical result the second time. 
 

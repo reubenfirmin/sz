@@ -1,7 +1,6 @@
 package io
 
-import kotlinx.cinterop.refTo
-import kotlinx.cinterop.toKString
+import kotlinx.cinterop.*
 import platform.posix.*
 
 object IOHelpers {
@@ -79,6 +78,28 @@ object IOHelpers {
 
         return stdout.trim()
     }
+
+
+    fun stat.isDirectory() = st_mode and S_IFMT.toUInt() == S_IFDIR.toUInt()
+
+    fun stat.isFile() = st_mode and S_IFMT.toUInt() != S_IFDIR.toUInt()
+
+    fun dirent.toFileInfo(parentPath: String): Pair<String, stat>? {
+        val nameBuf = this.d_name.toKString()
+        val name = nameBuf.trimEnd('\u0000')
+        if (name != "." && name != "..") {
+            val fullPath = "$parentPath/$name"
+            return fullPath to statFile(fullPath)
+        }
+        return null
+    }
+
+    fun statFile(path: String) = memScoped {
+        val info = alloc<stat>()
+        stat(path, info.ptr)
+        info
+    }
+
 }
 
 enum class Color(val hex: Int) {
