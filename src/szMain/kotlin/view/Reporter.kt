@@ -2,7 +2,6 @@ package view
 
 import io.Color
 import io.Color.*
-import io.IOHelpers
 import io.IOHelpers.ansiBold
 import io.IOHelpers.ansiFg
 import kotlin.math.round
@@ -40,7 +39,7 @@ class Reporter(private val dir: String,
             .filter { zeroes || it.value > 0 }
             .forEach {
                 print(format(it.value, human))
-                print("\t")
+                print("\t\t")
                 println(it.key)
             }
     }
