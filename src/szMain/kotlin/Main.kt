@@ -5,7 +5,7 @@ import io.IOHelpers.printErr
 import kotlinx.cinterop.*
 import platform.posix.*
 
-val workers = WorkerPool(20)
+val workers = WorkerPool(20) // TODO tuneable
 
 fun main(args: Array<String>) {
 
@@ -14,41 +14,59 @@ fun main(args: Array<String>) {
         exit(1)
     }
 
-    val dir = args[0]
+    val dir = args[0].removeSuffix("/")
 
-    val res = processDirectory(dir)
     val results = mutableMapOf<String, Long>()
-    results[dir] = res.first
-    res.second.forEach {
-        submitAndCollect(it, results)
+    val res = submitAndCollect(dir, results)
+    val resultQueue = mutableListOf<WorkerPool.Result>()
+
+    // keep iterating for results until there's nothing running
+    while (workers.drain(false, resultQueue)) {
+        resultQueue.forEach { result ->
+//            println("Adding ${result} in top")
+            results[result.path] = result.size
+            result.otherPaths.forEach { path ->
+                submitAndCollect(path, results)
+            }
+        }
+        resultQueue.clear()
     }
-    workers.drain().forEach { result ->
-        println("Found ${result.path}")
+    workers.drain(true, resultQueue)
+    resultQueue.forEach {result ->
+  //      println("Adding ${result} in middle")
         results[result.path] = result.size
+        if (result.otherPaths.isNotEmpty()) {
+            print(ansiFg(Color.HIGHLIGHT_1, "ERROR"))
+            println(" ${result.path} ${result.otherPaths.size}")
+        }
     }
 
-//    println("Total size of $dir: $size")
-//    val onePercent = size / 100.0
-//    println("Entries with a greater size than $onePercent")
-    println("---------------------------------")
+
+    println("$dir files size: ${results[dir]}")
+    val fullSize = results.entries.sumOf { it.value }
+    println("$dir total size: $fullSize")
+
+    val onePercent = fullSize / 100.0
+    println("Entries that consume at least 1% of space in this folder")
+    println("---------------------------------------------------------")
     results.entries
         .sortedByDescending { it.value }
-        .filter { it.value > 0 }
+        .filter { it.value > onePercent }
         .forEach {
-            print(ansiFg(Color.HIGHLIGHT_0, it.key))
-            print("\t")
             print(ansiFg(Color.HIGHLIGHT_2, it.value.toString()))
-            print("\n")
+            print("\t")
+            println(ansiFg(Color.HIGHLIGHT_0, it.key))
         }
 }
 
 fun submitAndCollect(path: String, resultCollector: MutableMap<String, Long>) {
-    println("calling execute on $path")
+//    println("calling execute on $path")
     val results = workers.execute(path)
     for (result in results) {
+//        println("Adding ${result} in bottom")
         resultCollector[result.path] = result.size
         for (otherPath in result.otherPaths) {
-            println(">> $otherPath")
+            //println(">> $otherPath")
             submitAndCollect(otherPath, resultCollector)
         }
     }

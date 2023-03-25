@@ -44,21 +44,8 @@ class WorkerPool(numWorkers: Int) {
     fun execute(fullPath: String): List<Result> {
         val results = mutableListOf<Result>() // TODO pass in
         while (workers.size == 0) {
-            // groom the current jobs
-            val iterator = busy.iterator()
-            while (iterator.hasNext()) {
-                val job = iterator.next()
-                // TODO other states
-                if (job.future.state == FutureState.COMPUTED) {
-                    workerLock.withLock {
-                        iterator.remove()
-                        results.add(Result(job.path, job.future.result.first, job.future.result.second))
-                        workers.add(job.workerToReturn)
-                    }
-                }
-                sched_yield()
-            }
-            usleep(10000)
+            consumeBusy(results)
+            usleep(10000) // TODO tuneable
         }
         val worker = next(fullPath) { worker ->
             worker.execute(TransferMode.SAFE, { fullPath }) {
@@ -69,21 +56,41 @@ class WorkerPool(numWorkers: Int) {
     }
 
     /**
-     * Obtain results from any remaining workers
+     * Groom the current jobs
      */
-    fun drain(): List<Result> {
-        val results = mutableListOf<Result>() // TODO pass in
-        busy.forEach { job ->
-            job.future.consume {
-                results.add(Result(job.path, it.first, it.second))
-                job.workerToReturn.requestTermination()
+    private fun consumeBusy(results: MutableList<Result>): List<Result> {
+        val iterator = busy.iterator()
+        while (iterator.hasNext()) {
+            val job = iterator.next()
+            // TODO other states
+            if (job.future.state == FutureState.COMPUTED) {
+                workerLock.withLock {
+                    val result = job.future.result
+                    results.add(Result(job.path, result.first, result.second))
+                    iterator.remove()
+                    workers.add(job.workerToReturn)
+                }
             }
+            sched_yield()
         }
-        workers.forEach {
-            it.requestTermination()
-        }
-        workers.clear()
-        busy.clear()
         return results
+    }
+
+    /**
+     * Obtain results from any remaining workers, optionally terminating
+     */
+    fun drain(terminate: Boolean, results: MutableList<Result>): Boolean {
+        var found = false
+        while(busy.isNotEmpty()) {
+            consumeBusy(results)
+            found = true
+        }
+        if (terminate) {
+            workers.forEach {
+                it.requestTermination()
+            }
+            workers.clear()
+        }
+        return found
     }
 }
