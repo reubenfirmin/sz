@@ -3,3 +3,5 @@ szDebug
 .gradle
 .idea
 build
+/Cargo.lock
+/target/
