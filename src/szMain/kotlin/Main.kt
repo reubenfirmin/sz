@@ -23,7 +23,7 @@ fun main(args: Array<String>) {
     val human by parser.option(ArgType.Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
     val nocolors by parser.option(ArgType.Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors (only applies to human mode)").default(false)
     val nosummary by parser.option(ArgType.Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
-    val zeroes by parser.option(ArgType.Boolean, shortName = "vv", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
+    val zeroes by parser.option(ArgType.Boolean, shortName = "V", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
     val dir by parser.argument(ArgType.String, description = "Directory to analyze")
     parser.parse(args)
 

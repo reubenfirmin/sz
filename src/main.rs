@@ -2,28 +2,42 @@ use std::error::Error;
 use std::{fmt, fs};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use threadpool::ThreadPool;
 use std::path::PathBuf;
 use std::thread::yield_now;
 use std::sync::mpsc::Sender;
 use std::os::unix::fs::MetadataExt;
+use threadpool::ThreadPool;
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+// TODO for compatibility with du we turn off -h; not sure how to reenable help message
+#[command(disable_help_flag(true))]
+struct MyArgs {
+    #[arg(short, long)]
+    human: bool,
+    #[arg(short, long, default_value_t = 50)]
+    threads: i32,
+    #[arg(short='v', long)]
+    nosummary: bool,
+    #[arg(short='V', long)]
+    zeroes: bool,
+    #[arg(short='c', long)]
+    nocolors: bool,
+    dir: String
+}
 
 /**
  * NOTE - this version is rudimentary / hacky. I'm starting to learn rust by building the
  * equivalent of the working (and more polished) kotlin native implementation.
  */
 fn main() {
-    // TODO real arg parsing
-    let args: Vec<String> = std::env::args().collect();
+    let args = MyArgs::parse();
 
-    if args.len() < 2 {
-        println!("Usage: {} <directory>", args[0]);
-        return;
-    }
+    println!("{} {} {} {} {} {}", args.human, args.threads, args.nosummary, args.zeroes, args.nocolors, args.dir);
     let blacklist = HashSet::from(["/proc", "/sys"]);
 
-    let dir = &args[1];
-    let all_results = scan_path(dir, 10, blacklist);
+    let dir = args.dir;
+    let all_results = scan_path(&dir, 10, blacklist);
     let mut result: Vec<_> = all_results.iter().collect();
     result.sort_by(|a, b| b.1.cmp(a.1));
 
