@@ -1,7 +1,5 @@
 import io.IOHelpers.findDevice
 import io.IOHelpers.getMounts
-import io.IOHelpers.printError
-import io.IOHelpers.statFile
 import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
 import kotlinx.cli.ArgParser
@@ -25,7 +23,6 @@ fun main(args: Array<String>) {
 
     val parser = ArgParser("sz", useDefaultHelpShortName = false)
     val threads by parser.option(Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
-    val pause by parser.option(Int, shortName = "p", fullName = "pause", description = "Microseconds to pause when waiting for workers").default(100)
     val human by parser.option(Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
     val nocolors by parser.option(Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors (only applies to human mode)").default(false)
     val nosummary by parser.option(Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
@@ -35,37 +32,38 @@ fun main(args: Array<String>) {
 
     device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
 
-    val workers = WorkerPool<String, Result>(threads, pause)
+    val workers = WorkerPool<String, Result>(threads)
 
     // initialize the scan on the top level dir
     submit(dir, workers)
 
     val results = mutableMapOf<String, Long>() // the final output
-    // to avoid unnecessary allocations, we pass this down to collect results
-    val resultQueue = mutableListOf<Result>()
-    // keep iterating for results (and submitting new jobs) until there's nothing running
-    while (workers.sip(resultQueue)) {
-        resultQueue.forEach { result ->
-            results[result.path] = result.size
-            result.otherPaths.forEach { path ->
+
+    // keep iterating for results (and submitting new jobs) until there's nothing running. since the coordinator is
+    // single threaded we can get away with this - we guarantee that we'll have something busy as long as there are
+    // paths to iterate.
+    var result: Result? = null
+    while (  run { result = workers.sip(); result} != null || workers.anyBusy()) {
+        if (result != null) {
+            results[result!!.path] = result!!.size
+            result!!.otherPaths.forEach { path ->
                 submit(path, workers)
             }
         }
-        resultQueue.clear()
         sched_yield()
     }
 
-    // drain remaining jobs from the queue
-    workers.drain(true, resultQueue)
-    // there should be none, because we already drained
-    if (DEBUG) {
-        resultQueue.forEach { result ->
-            printError("Workers was drained but found $result")
+    // drain remaining jobs from the queue. none of these jobs have paths
+    workers.drain().let {
+        if (it.isNotEmpty()) {
+            throw Exception("Should be none remaining but there were ${it.size}")
         }
     }
 
     Reporter(dir, results, human, nosummary, zeroes, !nocolors).report()
 }
+
+
 
 /**
  * Submit processing of a path to the worker pool. Blocks until a worker becomes available.
