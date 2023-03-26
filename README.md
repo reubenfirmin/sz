@@ -55,7 +55,7 @@ tests need to be created.
 
 TODOs:
 
-Possible bug: it doesn't match du's results 1:1. It may be overcounting.
+Possible bug: need to understand difference in output between `sz` and `du`; `du` consistently underreports usage as shown by both `sz` and `ls`, which concur in all directories that have been manually checked thus far.  
 
 Improvement: option to roll up summaries by common directory.
 
