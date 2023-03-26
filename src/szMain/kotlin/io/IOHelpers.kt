@@ -85,27 +85,10 @@ object IOHelpers {
         return stdout.trim()
     }
 
-    // convert masks to UInt once to avoid repeated ops
-    private val fileTypeBm = S_IFMT.toUInt() // bitmask
-    private val dirBits = S_IFDIR.toUInt()
-    private val fileBits = S_IFREG.toUInt()
-    private val symlinkBits = S_IFLNK.toUInt()
-
-    fun stat.isDirectory() = st_mode and fileTypeBm == dirBits
-
-    fun stat.isFile() = st_mode and fileTypeBm == fileBits
-
-    fun stat.isSymlink() = st_mode and fileTypeBm == symlinkBits
-
-    /**
-     * XXX this is suspect; don't rely on it yet
-     */
-    fun stat.isOnDevice(device: ULong) = st_dev == device
-
     /**
      * Convert a [dirent] (obtained from iterating over [readdir]) to a pair of absolute path, [stat] object
      */
-    fun dirent.toFileInfo(parentPath: String): Pair<String, stat>? {
+    fun dirent.toFileInfo(parentPath: String): StatInfo? {
         val nameBuf = this.d_name.toKString()
         // remove trailing null characters (which might be there because we're converting from a c array)
         // TODO this may not be necessary with toKString. Verify
@@ -113,9 +96,7 @@ object IOHelpers {
         if (name != "." && name != "..") {
             // File is not available in Kotlin native :(. So, this is a unix path structure (for now). If we really
             // wanted to support el doze, we could handle at compilation time somehow.
-            val fullPath = "${parentPath.removeSuffix("/")}/$name"
-            val st = statFile(fullPath)
-            return fullPath to st
+            return statFile("${parentPath.removeSuffix("/")}/$name")
         }
         return null
     }
@@ -124,10 +105,29 @@ object IOHelpers {
      * Return stat info about a file path. This calls lstat; symlinks will be identified as such rather than
      * dereferenced.
      */
-    fun statFile(path: String) = memScoped {
+    fun statFile(path: String): StatInfo? = memScoped {
         val info = alloc<stat>()
-        lstat(path, info.ptr)
-        info
+        if (lstat(path, info.ptr) != 0) {
+            return null // potentially return Go style error, or throw exception
+        }
+        return StatInfo(path, info.st_mode, info.st_dev, info.st_size)
+    }
+
+    data class StatInfo(val fullPath: String, val fileType: UInt, val device: ULong, val size: Long) {
+
+        // convert masks to UInt once to avoid repeated ops
+        private val fileTypeBm = S_IFMT.toUInt() // bitmask
+        private val dirBits = S_IFDIR.toUInt()
+        private val fileBits = S_IFREG.toUInt()
+        private val symlinkBits = S_IFLNK.toUInt()
+
+        fun isDirectory() = fileType and fileTypeBm == dirBits
+
+        fun isFile() = fileType and fileTypeBm == fileBits
+
+        fun isSymlink() = fileType and fileTypeBm == symlinkBits
+
+        fun isOnDevice(device: ULong) = this.device == device
     }
 
     /**

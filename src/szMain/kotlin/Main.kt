@@ -1,8 +1,7 @@
 import io.IOHelpers.findDevice
 import io.IOHelpers.getMounts
-import io.IOHelpers.isDirectory
-import io.IOHelpers.isFile
 import io.IOHelpers.printError
+import io.IOHelpers.statFile
 import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
 import kotlinx.cli.ArgParser
@@ -36,15 +35,14 @@ fun main(args: Array<String>) {
 
     device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
 
-    // to avoid unnecessary allocations, we pass these down and write to them in functions
-    val resultQueue = mutableListOf<Result>() // queue of results we have yet to process
-    val results = mutableMapOf<String, Long>() // the final output
-
     val workers = WorkerPool<String, Result>(threads, pause)
 
     // initialize the scan on the top level dir
     submit(dir, workers)
 
+    val results = mutableMapOf<String, Long>() // the final output
+    // to avoid unnecessary allocations, we pass this down to collect results
+    val resultQueue = mutableListOf<Result>()
     // keep iterating for results (and submitting new jobs) until there's nothing running
     while (workers.sip(resultQueue)) {
         resultQueue.forEach { result ->
@@ -109,11 +107,11 @@ fun processDirectory(path: String): Result {
                 val info = entry.toFileInfo(path)
                 // TODO isOnDevice (st_dev) not working, see slack
                 if (info != null) { //&& info.second.isOnDevice(device)) {
-                    if (info.second.isDirectory()) {
+                    if (info.isDirectory()) {
                         // indicate that we need to process this dir
-                        subPaths.add(info.first)
-                    } else if (info.second.isFile()) {
-                        fileSize += info.second.st_size
+                        subPaths.add(info.fullPath)
+                    } else if (info.isFile()) {
+                        fileSize += info.size
                     }
                 }
                 entry = readdir(directory)?.pointed
