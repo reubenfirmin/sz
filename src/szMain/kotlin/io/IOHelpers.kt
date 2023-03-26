@@ -57,11 +57,7 @@ object IOHelpers {
 
     fun ansiUnderline(content: String) = ansi("4m", content) + ansi("24m")
 
-    fun ansiFg(fg: Color, content: String) = ansi("\u001B[${fg.hex}m", content) + ansi("\u001B[0m")
-
-    fun ansiBg(bg: Color, content: String) = ansi("48;5;${bg.hex}m", content) + ansi("49m")
-
-    fun ansiColor(fg: Color, bg: Color, content: String) = ansiFg(fg, ansiBg(bg, content))
+    fun ansiFg(fg: Color, content: String) = "\u001B[${fg.hex}m$content\u001B[0m"
 
     /**
      * Run a command, returning results. Throws exception on failure.
