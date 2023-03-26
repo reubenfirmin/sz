@@ -48,13 +48,14 @@ or
 
 Beta.
 
-It works, output matches `du` (with differences noted above), and it is around 2x as fast as `du` even without 
-the skipping optimizations. With those optimizations it can be at least 10x as fast. 
+It works, and it is around 2x as fast as `du` even without the skipping optimizations. With those optimizations it can be at least 10x as fast. 
 
 It is not deeply battle tested or proven to be correct, and so is currently unsuitable for distribution. Extensive
 tests need to be created.
 
 TODOs:
+
+Possible bug: it doesn't match du's results 1:1. It may be overcounting.
 
 Improvement: option to roll up summaries by common directory.
 

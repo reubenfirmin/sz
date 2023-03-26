@@ -1,10 +1,8 @@
-import io.IOHelpers.findDevice
-import io.IOHelpers.getMounts
+import io.IOHelpers.statFile
 import io.IOHelpers.toFileInfo
 import kotlinx.cinterop.*
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
-import kotlinx.cli.ArgType.*
 import kotlinx.cli.default
 import platform.posix.*
 import view.Reporter
@@ -16,26 +14,35 @@ const val DEBUG = false
 val blacklist = setOf("/proc", "/sys")
 
 // the only device (disk) we'll examine
-private val mounts = getMounts()
-private var device = ""
+private var device = 0.toULong()
 
 fun main(args: Array<String>) {
 
     val parser = ArgParser("sz", useDefaultHelpShortName = false)
-    val threads by parser.option(Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
-    val human by parser.option(Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
-    val nocolors by parser.option(Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors (only applies to human mode)").default(false)
-    val nosummary by parser.option(Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
-    val zeroes by parser.option(Boolean, shortName = "vv", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
+    val threads by parser.option(ArgType.Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
+    val human by parser.option(ArgType.Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
+    val nocolors by parser.option(ArgType.Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors (only applies to human mode)").default(false)
+    val nosummary by parser.option(ArgType.Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
+    val zeroes by parser.option(ArgType.Boolean, shortName = "vv", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
     val dir by parser.argument(ArgType.String, description = "Directory to analyze")
     parser.parse(args)
 
-    device = findDevice(mounts, dir) ?: throw Exception("Couldn't find $dir in $mounts")
+    val results = scanPath(dir, threads)
+    Reporter(dir, results, human, nosummary, zeroes, !nocolors).report()
+}
+
+/**
+ * Scan a path and all sub-paths, summing the size of files in each path. Run in parallel with [threads] threads.
+ * @return map of fully qualified path to size in bytes
+ */
+fun scanPath(dir: String, threads: Int): Map<String, Long> {
+    val startAt = statFile(dir)
+    device = startAt!!.device
 
     val workers = WorkerPool<String, Result>(threads)
 
     // initialize the scan on the top level dir
-    submit(dir, workers)
+    workers.execute(dir, ::processDirectory)
 
     val results = mutableMapOf<String, Long>() // the final output
 
@@ -47,7 +54,10 @@ fun main(args: Array<String>) {
         if (result != null) {
             results[result!!.path] = result!!.size
             result!!.otherPaths.forEach { path ->
-                submit(path, workers)
+                // don't process virtual paths that are in our blacklist
+                if (path !in blacklist) {
+                    workers.execute(path, ::processDirectory)
+                }
             }
         }
         sched_yield()
@@ -59,29 +69,7 @@ fun main(args: Array<String>) {
             throw Exception("Should be none remaining but there were ${it.size}")
         }
     }
-
-    Reporter(dir, results, human, nosummary, zeroes, !nocolors).report()
-}
-
-
-
-/**
- * Submit processing of a path to the worker pool. Blocks until a worker becomes available.
- */
-fun submit(path: String, workers: WorkerPool<String, Result>) {
-    // don't process virtual paths that are in our blacklist
-    if (path in blacklist) {
-        return
-    }
-    // if this is a different mount, we'll skip it
-    val mount = mounts[path]
-    if (mount != null && mount != device) {
-        if (DEBUG) {
-            println("Skipping path on different mount $path")
-        }
-        return
-    }
-    workers.execute(path, ::processDirectory)
+    return results
 }
 
 /**
@@ -103,8 +91,7 @@ fun processDirectory(path: String): Result {
 
             while (entry != null) {
                 val info = entry.toFileInfo(path)
-                // TODO isOnDevice (st_dev) not working, see slack
-                if (info != null) { //&& info.second.isOnDevice(device)) {
+                if (info != null && info.isOnDevice(device)) {
                     if (info.isDirectory()) {
                         // indicate that we need to process this dir
                         subPaths.add(info.fullPath)
