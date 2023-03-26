@@ -1,7 +1,14 @@
 use std::error::Error;
 use std::{fmt, fs};
+use std::collections::HashMap;
+use std::sync::mpsc;
+use threadpool::ThreadPool;
 use std::path::PathBuf;
 
+/**
+ * NOTE - this rust version is extremely rudimentary. I'm starting to learn rust by building the
+ * equivalent of the working (and more polished) kotlin native implementation.
+ */
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -10,12 +17,34 @@ fn main() {
         return;
     }
 
-    let root_dir = PathBuf::from(&args[1]);
+    let dir = &args[1];
+    let result = scan_path(dir, 10);
+    let dir_size = result.get(dir);
+    println!("Total size: {} bytes", dir_size.unwrap());
+}
 
-    let metadata = process_directory(&root_dir).expect("Failed");
+fn scan_path(dir: &String, threads: usize) -> HashMap<String, u64> {
+    let root_path = PathBuf::from(dir);
 
+    let (tx, rx) = std::sync::mpsc::channel();
 
-    println!("Total size: {} bytes", metadata.size);
+    let pool = ThreadPool::new(threads);
+    let ptx = tx.clone();
+
+    submit(root_path, pool, ptx);
+
+    let mut results = HashMap::new();
+
+    let result = rx.recv().unwrap();
+    results.insert(dir.to_string(),result.size);
+    results
+}
+
+fn submit(path: PathBuf, pool: ThreadPool, tx: mpsc::Sender<DirMetadata>) {
+    pool.execute (move || {
+        let metadata = process_directory(&path).unwrap();
+        tx.send(metadata).unwrap();
+    });
 }
 
 fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error>> {
