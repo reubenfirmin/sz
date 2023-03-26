@@ -49,23 +49,13 @@ class Reporter(private val dir: String,
             size.toString()
         } else {
             if (size > 1_000_000_000) {
-                format(colors, ::ansiBold) {
-                    format(colors, HIGHLIGHT_4, ::ansiFg) {
-                        "${round2(size, 1_000_000_000)}G"
-                    }
-                }
+                "${round2(size, 1_000_000_000)}G".color(colors, HIGHLIGHT_4, ::ansiFg).format(colors, ::ansiBold)
             } else if (size > 1_000_000) {
-                format(colors, HIGHLIGHT_4, ::ansiFg) {
-                    "${round2(size, 1_000_000)}M"
-                }
+                "${round2(size, 1_000_000)}M".color(colors, HIGHLIGHT_4, ::ansiFg)
             } else if (size > 1_000) {
-                format(colors, HIGHLIGHT_2, ::ansiFg) {
-                    "${round2(size, 1_000)}K"
-                }
+                "${round2(size, 1_000)}K".color(colors, HIGHLIGHT_2, ::ansiFg)
             } else {
-                format(colors, HIGHLIGHT_1, ::ansiFg) {
-                    size.toString()
-                }
+                size.toString().color(colors, HIGHLIGHT_1, ::ansiFg)
             }
         }
 
@@ -74,17 +64,17 @@ class Reporter(private val dir: String,
      */
     private fun round2(size: Long, divisor: Int) = round((size / divisor.toDouble()) * 100) / 100.0
 
-    private fun format(colors: Boolean, formatter: (String) -> String, content: () -> String) =
+    private fun String.format(colors: Boolean, formatter: (String) -> String) =
         if (colors) {
-            formatter(content.invoke())
+            formatter(this)
         } else {
-            content.invoke()
+            this
         }
 
-    private fun format(colors: Boolean, color: Color, formatter: (Color, String) -> String, content: () -> String) =
+    private fun String.color(colors: Boolean, color: Color, formatter: (Color, String) -> String) =
         if (colors) {
-            formatter(color, content.invoke())
+            formatter(color, this)
         } else {
-            content.invoke()
+            this
         }
 }

@@ -1,3 +1,5 @@
+mod view;
+
 use std::error::Error;
 use std::{fmt, fs};
 use std::collections::HashMap;
@@ -8,6 +10,12 @@ use std::sync::mpsc::Sender;
 use std::os::unix::fs::MetadataExt;
 use threadpool::ThreadPool;
 use clap::Parser;
+use crate::view::report;
+
+/**
+ * NOTE - I ported the kotlin version to rust to start picking up the language. This is extremely
+ * likely to be poorly structured. (However, it works more or less identically.)
+ */
 
 #[derive(Parser, Debug)]
 // TODO for compatibility with du we turn off -h; not sure how to reenable help message
@@ -26,24 +34,13 @@ struct MyArgs {
     dir: String
 }
 
-/**
- * NOTE - this version is rudimentary / hacky. I'm starting to learn rust by building the
- * equivalent of the working (and more polished) kotlin native implementation.
- */
 fn main() {
     let args = MyArgs::parse();
-
-    println!("{} {} {} {} {} {}", args.human, args.threads, args.nosummary, args.zeroes, args.nocolors, args.dir);
     let blacklist = HashSet::from(["/proc", "/sys"]);
 
     let dir = args.dir;
     let all_results = scan_path(&dir, 10, blacklist);
-    let mut result: Vec<_> = all_results.iter().collect();
-    result.sort_by(|a, b| b.1.cmp(a.1));
-
-    for x in result.iter().take(10) {
-        println!("{}\t\t{}", x.1, x.0)
-    }
+    report(dir, all_results, args.human, args.nosummary, args.zeroes, !args.nocolors);
 }
 
 /**
