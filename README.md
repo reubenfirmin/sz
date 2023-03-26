@@ -57,6 +57,7 @@ tests need to be created.
 TODOs:
 
 Improvement: option to roll up summaries by common directory.
+
 Improvement: better handling of formatting options.
 
 ## Building
