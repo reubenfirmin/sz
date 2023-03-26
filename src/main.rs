@@ -1,8 +1,8 @@
-use std::fs;
+use std::error::Error;
+use std::{fmt, fs};
 use std::path::PathBuf;
 
 fn main() {
-    println!("Hello world");
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
@@ -12,30 +12,30 @@ fn main() {
 
     let root_dir = PathBuf::from(&args[1]);
 
-    let total_size = get_directory_size(&root_dir).unwrap_or_else(|err| {
-        eprintln!("Error: {}", err);
-        std::process::exit(1);
-    });
+    let metadata = process_directory(&root_dir).expect("Failed");
 
-    println!("Total size: {} bytes", total_size);
+
+    println!("Total size: {} bytes", metadata.size);
 }
 
-fn get_directory_size(dir_path: &PathBuf) -> Result<u64, String> {
-    let metadata = fs::metadata(dir_path).map_err(|err| format!("{}", err))?;
+fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error>> {
+    let metadata = fs::metadata(dir_path)?;
     if !metadata.is_dir() {
-        return Ok(metadata.len());
+        return Result::Err(Box::new(MyError("Not a dir".into())))
     }
 
-    let mut size = metadata.len();
+    let mut result = DirMetadata {
+        size: 0,
+        paths: Vec::new()
+    };
 
-    for entry in fs::read_dir(dir_path).map_err(|e| e.to_string())? {
-        let entry = entry.map_err(|e| e.to_string())?;
+    let mut size = 0;
+
+    for entry in fs::read_dir(dir_path)? {
+        let entry = entry?;
         let path = entry.path();
         if path.is_dir() {
-            size += match get_directory_size(&path) {
-                Ok(size) => size,
-                Err(_) => 0
-            }
+            result.paths.push(path);
         } else {
             size += match entry.metadata() {
                 Ok(size) => size.len(),
@@ -44,6 +44,22 @@ fn get_directory_size(dir_path: &PathBuf) -> Result<u64, String> {
         }
     }
 
-    Ok(size)
+    result.size = size;
+    Ok(result)
+}
 
+#[derive(Debug)]
+struct MyError(String);
+
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "There is an error: {}", self.0)
+    }
+}
+
+impl Error for MyError{}
+
+struct DirMetadata {
+    paths: Vec<PathBuf>,
+    size: u64
 }
