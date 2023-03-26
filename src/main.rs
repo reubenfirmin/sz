@@ -1,25 +1,29 @@
 use std::error::Error;
 use std::{fmt, fs};
 use std::collections::HashMap;
+use std::collections::HashSet;
 use threadpool::ThreadPool;
 use std::path::PathBuf;
 use std::thread::yield_now;
 use std::sync::mpsc::Sender;
+use std::os::unix::fs::MetadataExt;
 
 /**
  * NOTE - this version is rudimentary / hacky. I'm starting to learn rust by building the
  * equivalent of the working (and more polished) kotlin native implementation.
  */
 fn main() {
+    // TODO real arg parsing
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() < 2 {
         println!("Usage: {} <directory>", args[0]);
         return;
     }
+    let blacklist = HashSet::from(["/proc", "/sys"]);
 
     let dir = &args[1];
-    let all_results = scan_path(dir, 10);
+    let all_results = scan_path(dir, 10, blacklist);
     let mut result: Vec<_> = all_results.iter().collect();
     result.sort_by(|a, b| b.1.cmp(a.1));
 
@@ -28,20 +32,27 @@ fn main() {
     }
 }
 
-fn scan_path(dir: &String, threads: usize) -> HashMap<String, u64> {
-
+/**
+ * Iterate a path and its subdirectories, collecting the size of each directory by summing files
+ * within it.
+ */
+fn scan_path(dir: &String, threads: usize, blacklist: HashSet<&str>) -> HashMap<String, u64> {
+    // set up a channel to receive results back from threads
     let (tx, rx) = std::sync::mpsc::channel();
 
     let pool = ThreadPool::new(threads);
 
-    let mut jobs = 0;
+    // TODO I don't love this algorithm. We run until we've received/handled the same number of
+    // results as we've submitted; this is because I can't figure out how to check the pool to see
+    // if anything is _actually_ running (vs than just being an active thread). Maybe it's fine.
+    let mut job = 0;
     let mut found = 0;
     let mut results = HashMap::new();
 
-    jobs += 1;
+    job += 1;
     submit(PathBuf::from(dir), &pool, tx.clone());
 
-    while jobs > found  {
+    while job > found {
         // pick results off the receiving channel
         let mut iter = rx.try_iter();
         while let Some(result) = iter.next() {
@@ -50,11 +61,18 @@ fn scan_path(dir: &String, threads: usize) -> HashMap<String, u64> {
                     let displayed = it.path.display().to_string();
                     results.insert(displayed,it.size);
                     for subpath in it.paths {
-                        jobs += 1;
-                        submit(subpath, &pool, tx.clone());
+                        let subdisplay = subpath.display().to_string();
+                        if !blacklist.contains(&*subdisplay) {
+                            // println!("{} {} {}", subdisplay, job, found);
+                            job += 1;
+                            submit(subpath, &pool, tx.clone());
+                        } else {
+                            // skipped, it's not a real filesystem
+                            // println!("Skipping {}", subdisplay)
+                        }
                     }
                 },
-                Err(msg) => { println!("{}", msg.to_string()) }
+                Err(_) => { /* sshh */}
             }
             found += 1;
         }
@@ -63,6 +81,9 @@ fn scan_path(dir: &String, threads: usize) -> HashMap<String, u64> {
     results
 }
 
+/**
+ * Submits a directory iteration to the worker pool.
+ */
 fn submit(path: PathBuf, pool: &ThreadPool, tx: Sender<Result<DirMetadata, Box<dyn Error + Send + Sync>>>) {
     pool.execute (move || {
         let result = process_directory(&path);
@@ -70,8 +91,12 @@ fn submit(path: PathBuf, pool: &ThreadPool, tx: Sender<Result<DirMetadata, Box<d
     });
 }
 
+/**
+ * Sum the sizes of files in this directory, and collect any direct subpaths.
+ */
 fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error + Send + Sync>> {
     let metadata = fs::metadata(dir_path)?;
+    let device = metadata.dev();
     if !metadata.is_dir() {
         return Result::Err(Box::new(MyError("Not a dir".into())))
     }
@@ -87,7 +112,10 @@ fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error + 
     for entry in fs::read_dir(dir_path)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_dir() {
+        if path.is_symlink() {
+            continue
+        // TODO avoid calling metadata twice on each dir!
+        } else if path.is_dir() && path.metadata()?.dev() == device {
             result.paths.push(path);
         } else {
             size += match entry.metadata() {
@@ -101,6 +129,7 @@ fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error + 
     Ok(result)
 }
 
+// TODO is there a generic error I can just use instead of rolling my own?
 #[derive(Debug)]
 struct MyError(String);
 
