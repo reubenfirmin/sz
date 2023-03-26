@@ -1,12 +1,13 @@
 use std::error::Error;
 use std::{fmt, fs};
 use std::collections::HashMap;
-use std::sync::mpsc;
 use threadpool::ThreadPool;
 use std::path::PathBuf;
+use std::thread::yield_now;
+use std::sync::mpsc::Sender;
 
 /**
- * NOTE - this rust version is extremely rudimentary. I'm starting to learn rust by building the
+ * NOTE - this version is rudimentary / hacky. I'm starting to learn rust by building the
  * equivalent of the working (and more polished) kotlin native implementation.
  */
 fn main() {
@@ -18,42 +19,65 @@ fn main() {
     }
 
     let dir = &args[1];
-    let result = scan_path(dir, 10);
-    let dir_size = result.get(dir);
-    println!("Total size: {} bytes", dir_size.unwrap());
+    let all_results = scan_path(dir, 10);
+    let mut result: Vec<_> = all_results.iter().collect();
+    result.sort_by(|a, b| b.1.cmp(a.1));
+
+    for x in result.iter().take(10) {
+        println!("{}\t\t{}", x.1, x.0)
+    }
 }
 
 fn scan_path(dir: &String, threads: usize) -> HashMap<String, u64> {
-    let root_path = PathBuf::from(dir);
 
     let (tx, rx) = std::sync::mpsc::channel();
 
     let pool = ThreadPool::new(threads);
-    let ptx = tx.clone();
 
-    submit(root_path, pool, ptx);
-
+    let mut jobs = 0;
+    let mut found = 0;
     let mut results = HashMap::new();
 
-    let result = rx.recv().unwrap();
-    results.insert(dir.to_string(),result.size);
+    jobs += 1;
+    submit(PathBuf::from(dir), &pool, tx.clone());
+
+    while jobs > found  {
+        // pick results off the receiving channel
+        let mut iter = rx.try_iter();
+        while let Some(result) = iter.next() {
+            match result {
+                Ok(it) => {
+                    let displayed = it.path.display().to_string();
+                    results.insert(displayed,it.size);
+                    for subpath in it.paths {
+                        jobs += 1;
+                        submit(subpath, &pool, tx.clone());
+                    }
+                },
+                Err(msg) => { println!("{}", msg.to_string()) }
+            }
+            found += 1;
+        }
+        yield_now()
+    }
     results
 }
 
-fn submit(path: PathBuf, pool: ThreadPool, tx: mpsc::Sender<DirMetadata>) {
+fn submit(path: PathBuf, pool: &ThreadPool, tx: Sender<Result<DirMetadata, Box<dyn Error + Send + Sync>>>) {
     pool.execute (move || {
-        let metadata = process_directory(&path).unwrap();
-        tx.send(metadata).unwrap();
+        let result = process_directory(&path);
+        tx.send(result).expect("Couldn't send!");
     });
 }
 
-fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error>> {
+fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error + Send + Sync>> {
     let metadata = fs::metadata(dir_path)?;
     if !metadata.is_dir() {
         return Result::Err(Box::new(MyError("Not a dir".into())))
     }
 
     let mut result = DirMetadata {
+        path: dir_path.clone(),
         size: 0,
         paths: Vec::new()
     };
@@ -89,6 +113,7 @@ impl fmt::Display for MyError {
 impl Error for MyError{}
 
 struct DirMetadata {
+    path: PathBuf,
     paths: Vec<PathBuf>,
     size: u64
 }
