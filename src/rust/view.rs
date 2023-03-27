@@ -1,14 +1,24 @@
 use std::collections::HashMap;
 
-pub fn report(dir: String, results: HashMap<String, u64>, human: bool, nosummary: bool, zeroes: bool, colors: bool) {
+pub struct FormatOptions {
+    pub human: bool,
+    pub nosummary: bool,
+    pub zeroes: bool,
+    pub colors: bool
+}
+
+/**
+ * Output a text report
+ */
+pub fn report(dir: String, results: HashMap<String, u64>, options: FormatOptions) {
     let mut result: Vec<_> = results.iter().map(|(a,b)|(a, b)).collect();
     result.sort_by(|a, b| b.1.cmp(&a.1));
 
-    println!("{} files size: {}", dir, fmt(results.get(&dir).unwrap(), human, colors));
+    println!("{} files size: {}", dir, fmt(results.get(&dir).unwrap(), options.human, options.colors));
     let full_size: u64 = results.values().sum();
-    println!("{} total size: {}", dir, fmt(&full_size, human, colors));
+    println!("{} total size: {}", dir, fmt(&full_size, options.human, options.colors));
 
-    let summary = !nosummary && !zeroes;
+    let summary = !options.nosummary && !options.zeroes;
     let one_percent = (full_size as f64 / 100.0) as u64;
 
     if summary {
@@ -16,10 +26,10 @@ pub fn report(dir: String, results: HashMap<String, u64>, human: bool, nosummary
     }
     println!("---------------------------------------------------------");
     result.iter()
-        .filter(|x|!summary || x.1 > &one_percent)
-        .filter(|x| zeroes || x.1 > &0)
+        .filter(|x| !summary || x.1 > &one_percent)
+        .filter(|x| options.zeroes || x.1 > &0)
         .for_each(|x| {
-            print!("{}", fmt(x.1, human, colors));
+            print!("{}", fmt(x.1, options.human, options.colors));
             print!("\t\t");
             println!("{}", x.0);
         });

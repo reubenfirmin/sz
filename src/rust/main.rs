@@ -11,16 +11,20 @@ use std::os::unix::fs::MetadataExt;
 use threadpool::ThreadPool;
 use clap::Parser;
 use crate::view::report;
+use crate::view::FormatOptions;
 
 /**
  * NOTE - I ported the kotlin version to rust to start picking up the language. This is extremely
- * likely to be poorly structured. (However, it works more or less identically.)
+ * likely to not be idiomatic. (However, it works more or less identically.)
  */
 
+/**
+ * Command line args
+ */
 #[derive(Parser, Debug)]
 // TODO for compatibility with du we turn off -h; not sure how to reenable help message
 #[command(disable_help_flag(true))]
-struct MyArgs {
+struct Args {
     #[arg(short, long)]
     human: bool,
     #[arg(short, long, default_value_t = 50)]
@@ -35,12 +39,15 @@ struct MyArgs {
 }
 
 fn main() {
-    let args = MyArgs::parse();
-    let blacklist = HashSet::from(["/proc", "/sys"]);
-
+    let args = Args::parse();
     let dir = args.dir;
-    let all_results = scan_path(&dir, 10, blacklist);
-    report(dir, all_results, args.human, args.nosummary, args.zeroes, !args.nocolors);
+    let all_results = scan_path(&dir, 10, HashSet::from(["/proc", "/sys"]));
+    report(dir, all_results, FormatOptions {
+        human: args.human,
+        nosummary: args.nosummary,
+        zeroes: args.zeroes,
+        colors: !args.nocolors
+    });
 }
 
 /**
@@ -53,17 +60,18 @@ fn scan_path(dir: &String, threads: usize, blacklist: HashSet<&str>) -> HashMap<
 
     let pool = ThreadPool::new(threads);
 
-    // TODO I don't love this algorithm. We run until we've received/handled the same number of
-    // results as we've submitted; this is because I can't figure out how to check the pool to see
-    // if anything is _actually_ running (vs than just being an active thread). Maybe it's fine.
-    let mut job = 0;
-    let mut found = 0;
+    // Run until we've received/handled the same number of results as we've submitted. Ideal world
+    // we could get more state from the threadpool and not have to track this.
+    let mut pending = 0;
     let mut results = HashMap::new();
 
-    job += 1;
-    submit(PathBuf::from(dir), &pool, tx.clone());
+    let path = PathBuf::from(dir);
+    let device = fs::metadata(&path).expect(&format!("Cannot find path at {}", dir)).dev();
 
-    while job > found {
+    pending += 1;
+    submit(path, device, &pool, tx.clone());
+
+    while pending > 0 {
         // pick results off the receiving channel
         let mut iter = rx.try_iter();
         while let Some(result) = iter.next() {
@@ -74,18 +82,17 @@ fn scan_path(dir: &String, threads: usize, blacklist: HashSet<&str>) -> HashMap<
                     for subpath in it.paths {
                         let subdisplay = subpath.display().to_string();
                         if !blacklist.contains(&*subdisplay) {
-                            // println!("{} {} {}", subdisplay, job, found);
-                            job += 1;
-                            submit(subpath, &pool, tx.clone());
-                        } else {
-                            // skipped, it's not a real filesystem
-                            // println!("Skipping {}", subdisplay)
+                            pending += 1;
+                            submit(subpath, device, &pool, tx.clone());
                         }
                     }
                 },
-                Err(_) => { /* sshh */}
+                Err(_) => {
+                    // we suppress errors because we don't care about folders we don't have
+                    // access to. TODO add flag to show these
+                }
             }
-            found += 1;
+            pending -= 1;
         }
         yield_now()
     }
@@ -95,9 +102,9 @@ fn scan_path(dir: &String, threads: usize, blacklist: HashSet<&str>) -> HashMap<
 /**
  * Submits a directory iteration to the worker pool.
  */
-fn submit(path: PathBuf, pool: &ThreadPool, tx: Sender<Result<DirMetadata, Box<dyn Error + Send + Sync>>>) {
+fn submit(path: PathBuf, device: u64, pool: &ThreadPool, tx: Sender<Result<DirMetadata, Box<dyn Error + Send + Sync>>>) {
     pool.execute (move || {
-        let result = process_directory(&path);
+        let result = process_directory(&path, device);
         tx.send(result).expect("Couldn't send!");
     });
 }
@@ -105,13 +112,7 @@ fn submit(path: PathBuf, pool: &ThreadPool, tx: Sender<Result<DirMetadata, Box<d
 /**
  * Sum the sizes of files in this directory, and collect any direct subpaths.
  */
-fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error + Send + Sync>> {
-    let metadata = fs::metadata(dir_path)?;
-    let device = metadata.dev();
-    if !metadata.is_dir() {
-        return Result::Err(Box::new(MyError("Not a dir".into())))
-    }
-
+fn process_directory(dir_path: &PathBuf, device: u64) -> Result<DirMetadata, Box<dyn Error + Send + Sync>> {
     let mut result = DirMetadata {
         path: dir_path.clone(),
         size: 0,
@@ -121,16 +122,16 @@ fn process_directory(dir_path: &PathBuf) -> Result<DirMetadata, Box<dyn Error + 
     let mut size = 0;
 
     for entry in fs::read_dir(dir_path)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_symlink() {
+        let subpath = entry?.path();
+
+        if subpath.is_symlink() {
             continue
         // TODO avoid calling metadata twice on each dir!
-        } else if path.is_dir() && path.metadata()?.dev() == device {
-            result.paths.push(path);
+        } else if subpath.is_dir() && subpath.metadata()?.dev() == device {
+            result.paths.push(subpath);
         } else {
-            size += match entry.metadata() {
-                Ok(size) => size.len(),
+            size += match subpath.metadata() {
+                Ok(metadata) => metadata.len(),
                 Err(_) => 0
             }
         }
