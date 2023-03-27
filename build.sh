@@ -7,3 +7,5 @@ if ./gradlew assemble; then
 else
 	echo Build failed!
 fi	
+
+cargo build --release

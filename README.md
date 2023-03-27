@@ -2,7 +2,7 @@
 
 ## About
 
-This is an improved version of `du`, written with Kotlin Native. It's intended to quickly answer the question that most of us
+This is an improved version of `du`, written with both Kotlin Native and Rust. It's intended to quickly answer the question that most of us
 probably use `du` for, i.e. "what the hell is using all my disk space"?
 
 It contains the following improvements:
@@ -48,21 +48,37 @@ or
 
 Beta.
 
-It works, and it is around 2x as fast as `du` even without the skipping optimizations. With those optimizations it can be at least 10x as fast. 
+It works, and it (the Kotlin version) is around 2x as fast as `du` even without the skipping optimizations. With those optimizations it can be at least 10x as fast. 
 
 It is not deeply battle tested or proven to be correct, and so is currently unsuitable for distribution. Extensive
 tests need to be created.
 
 TODOs:
 
-Possible bug: need to understand difference in output between `sz` and `du`; `du` consistently underreports usage as shown by both `sz` and `ls`, which concur in all directories that have been manually checked thus far.  
+Possible bug: need to understand what `du` does differently; both versions of `sz` report identical numbers, which are consistently a bit higher than `du`'s; manual checks of directories that I've done with `ls` also agree with `sz`. Is `du` wrong or just doing something subtly different? TBD.  
 
 Improvement: option to roll up summaries by common directory.
 
 Improvement: better handling of formatting options.
+
+Challenge: write a Go version.
+
+Challenge: refactor the Rust version to look better.
 
 ## Building
 
 apt install gcc-multilib
 ./build.sh
 sudo ./install.sh
+
+## Rust vs Kotlin Native
+
+The Kotlin version is currently the one which gets installed, even though it is slower than the Rust version (by roughly 30%). Two reasons:
+
+1) This is the first Rust code I've written, and I'm sure it's not idiomatic. There may well be bugs.
+
+2) The Rust version is currently less tested than the Kotlin.
+
+3) The argument parser isn't as helpful in printing a usage message in the Rust version (this is because I turned off the help_usage in order to be able to use -h; I will fix this by making -h default.)
+
+In time the Rust version will likely become the one which gets installed.
