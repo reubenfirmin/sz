@@ -69,9 +69,11 @@ Challenge: refactor the Rust version to look better.
 
 ## Building
 
+```
 apt install gcc-multilib
 ./build.sh
 sudo ./install.sh
+```
 
 ## Rust vs Kotlin Native
 
