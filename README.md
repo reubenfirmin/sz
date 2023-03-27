@@ -8,7 +8,7 @@ answer the question that most of us probably use `du` for, i.e. "what the hell i
 It contains the following improvements:
 * It's much faster
 * It skips virtual filesystems like /proc and /sys
-* It (always, and by default) skips paths mounted on other devices from the starting path (du has this option, but it's not a well know param)
+* It (always, and by default) skips paths mounted on other devices from the starting path (du has this option, but it's not a well known param)
 * It sorts the output by file size, high to low, even when formatting them to be human readable
 * It (by default) only returns results for directories using at least 1% of all files under the path
 * It won't complain about directories that it doesn't have permission to access; for example, running against / as a regular user will work, but the size will be less than if you run with sudo
