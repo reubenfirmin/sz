@@ -1,22 +1,62 @@
 package main
 
 import (
-    "fmt"
+    "flag"
     "os"
     "syscall"
 )
 
+/**
+ * Like the rust version, this is my first go code, and is probably not idiomatic.
+ */
 func main() {
-    dir := "/home/rfirmin" // Change this to the directory you want to stat
+
+    // TODO finish adding all of the formatting options supported by the other versions
+    var dir string
+
+    // TODO understand precedence of default args
+    flag.StringVar(&dir, "dir", "", "The directory")
+    flag.StringVar(&dir, "d", "", "The directory")
+    flag.Parse()
+
+    // TODO surely a better way to provide positional / unflagged args
+    if dir == "" {
+        args := flag.Args()
+        // TODO handle error/empty
+        dir = args[0]
+    }
+
     fileInfo, _ := os.Lstat(dir)
     stat := fileInfo.Sys().(*syscall.Stat_t)
     device := stat.Dev
 
-    dirInfo := processDir(dir, device)
-    fmt.Println("dir ", dirInfo.Path, " size is ", dirInfo.Size)
-    for _, subpath := range dirInfo.SubPaths {
-        fmt.Println(subpath)
+    report(dir, scanPath(dir, device))
+}
+
+func scanPath(dir string, device uint64) map[string]int64 {
+
+    ch := make(chan DirResult)
+
+    results := make(map[string]int64)
+
+    // TODO for now use goroutines rather than a pool of os threads. what does perf look like?
+    pending := 1
+    go submit(dir, device, ch)
+
+    for pending > 0 {
+        result := <- ch
+        pending -= 1
+        results[result.Path] = result.Size
+        for _, subpath := range result.SubPaths {
+            pending += 1
+            go submit(subpath, device, ch)
+        }
     }
+    return results
+}
+
+func submit(dir string, device uint64, ch chan <- DirResult) {
+    ch <- processDir(dir, device)
 }
 
 func processDir(dir string, device uint64) DirResult {
@@ -24,7 +64,7 @@ func processDir(dir string, device uint64) DirResult {
     result := DirResult{Path: dir}
 
     if err != nil {
-        fmt.Println(err)
+//        fmt.Println(err)
         return result
     }
 

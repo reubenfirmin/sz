@@ -60,15 +60,14 @@ fn scan_path(dir: &String, threads: usize, blacklist: HashSet<&str>) -> HashMap<
 
     let pool = ThreadPool::new(threads);
 
-    // Run until we've received/handled the same number of results as we've submitted. Ideal world
-    // we could get more state from the threadpool and not have to track this.
-    let mut pending = 0;
     let mut results = HashMap::new();
 
     let path = PathBuf::from(dir);
     let device = fs::metadata(&path).expect(&format!("Cannot find path at {}", dir)).dev();
 
-    pending += 1;
+    // Run until we've received/handled the same number of results as we've submitted. Ideal world
+    // we could get more state from the threadpool and not have to track this.
+    let mut pending = 1;
     submit(path, device, &pool, tx.clone());
 
     while pending > 0 {
