@@ -35,8 +35,9 @@ kotlin {
             dependencies {
                 implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
             }
+            kotlin.srcDirs("src/kotlin")
         }
-        val szTest by getting
+
     }
 
     // this is here to fool intellij into being able to run tests
