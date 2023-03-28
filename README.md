@@ -24,7 +24,7 @@ Optimization:
 
 Formatting:
 * -v - verbose mode; don't summarize 
-* -vv - extra verbose mode; also including directories that are 0 size
+* -V - extra verbose mode; also including directories that are 0 size
 * -h - format numbers for humans (1.1G, 2.45M, etc)
 * -c - turn off ansi escape modes / colors when in human mode
 
