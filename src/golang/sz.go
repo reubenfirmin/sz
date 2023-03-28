@@ -78,6 +78,7 @@ func processDir(dir string, device uint64) DirResult {
         stat := fileInfo.Sys().(*syscall.Stat_t)
         if fileInfo.Mode() & os.ModeSymlink != 0 {
             continue
+        // TODO add virtual filesystem blacklist
         } else if stat.Dev == device && fileInfo.IsDir() {
             result.SubPaths = append(result.SubPaths, path)
         } else {
