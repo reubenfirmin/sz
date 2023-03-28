@@ -1,11 +1,25 @@
 #!/bin/bash
 
+echo BUILDING KOTLIN
+
 if ./gradlew assemble; then
-	# TODO figure out why "untitled"
-	cp build/bin/sz/releaseExecutable/sz.kexe ./sz
-	cp build/bin/sz/debugExecutable/sz.kexe ./szDebug
+	cp build/bin/sz/releaseExecutable/sz.kexe ./sz_kn
 else
-	echo Build failed!
+	echo Kotlin build failed!
 fi	
 
-cargo build --release
+echo BUILDING RUST
+
+if cargo build --release; then
+	cp target/release/sz ./sz_rs
+else
+	echo Rust build failed!
+fi
+
+echo BUILDING GO
+
+if go build -o sz_go src/golang/sz.go; then
+	echo Success!
+else
+	echo Go build failed!
+fi
