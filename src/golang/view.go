@@ -7,7 +7,7 @@ import (
 
 func report(dir string, results map[string]int64) {
 	type kv struct {
-		key string
+		key   string
 		value int64
 	}
 
