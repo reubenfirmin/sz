@@ -73,7 +73,9 @@ Challenge: write a TUI in either Go or Rust, or maybe both.
 ## Building
 
 ```
-apt install gcc-multilib
+Install rust: https://www.rust-lang.org/tools/install 
+
+apt install gcc-multilib golang
 ./build.sh
 sudo ./install.sh
 ```
