@@ -9,6 +9,7 @@ It contains the following improvements:
 * It's much faster
 * It skips virtual filesystems like /proc and /sys
 * It (always, and by default) skips paths mounted on other devices from the starting path (du has this option, but it's not a well known param)
+* It's formats numbers as human readable by default
 * It sorts the output by file size, high to low, even when formatting them to be human readable
 * It (by default) only returns results for directories using at least 1% of all files under the path
 * It won't complain about directories that it doesn't have permission to access; for example, running against / as a regular user will work, but the size will be less than if you run with sudo
@@ -29,14 +30,14 @@ Optimization:
 Formatting:
 * -v - verbose mode; don't summarize 
 * -V - extra verbose mode; also including directories that are 0 size
-* -h - format numbers for humans (1.1G, 2.45M, etc)
+* -r - format numbers for machine consumption rather than for humans (1053433 vs 1.05M)
 * -c - turn off ansi escape modes / colors when in human mode
 
 Examples:
 
-`sz /tmp --human`
+`sz /tmp --raw`
 
-`sz -v --threads 50 /tmp -h`
+`sz -v --threads 50 /tmp`
 
 Note that if you pipe to less, by default the ansi escape codes will show, which will be ugly. So you can either do:
 

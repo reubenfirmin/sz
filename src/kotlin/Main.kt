@@ -20,7 +20,7 @@ fun main(args: Array<String>) {
 
     val parser = ArgParser("sz", useDefaultHelpShortName = false)
     val threads by parser.option(ArgType.Int, shortName = "t", fullName = "threads", description = "Threads").default(50)
-    val human by parser.option(ArgType.Boolean, shortName = "h", fullName = "human", description = "Human readable sizes").default(false)
+    val raw by parser.option(ArgType.Boolean, shortName = "r", fullName = "raw", description = "Machine readable sizes").default(false)
     val nocolors by parser.option(ArgType.Boolean, shortName = "c", fullName = "nocolors", description = "Turn off ansi colors (only applies to human mode)").default(false)
     val nosummary by parser.option(ArgType.Boolean, shortName = "v", fullName = "all", description = "Verbose output - show all non-zero results").default(false)
     val zeroes by parser.option(ArgType.Boolean, shortName = "V", fullName = "zeroes", description = "Extra verbose output - show all output, including non-zero").default(false)
@@ -28,7 +28,7 @@ fun main(args: Array<String>) {
     parser.parse(args)
 
     val results = scanPath(dir, threads)
-    Reporter(dir, results, human, nosummary, zeroes, !nocolors).report()
+    Reporter(dir, results, !raw, nosummary, zeroes, !nocolors).report()
 }
 
 /**

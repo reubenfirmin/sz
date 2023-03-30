@@ -22,18 +22,16 @@ use crate::view::FormatOptions;
  * Command line args
  */
 #[derive(Parser, Debug)]
-// TODO for compatibility with du we turn off -h; not sure how to reenable help message
-#[command(disable_help_flag(true))]
 struct Args {
-    #[arg(short, long)]
-    human: bool,
+    #[arg(short, long, default_value_t = false)]
+    raw: bool,
     #[arg(short, long, default_value_t = 50)]
     threads: i32,
     #[arg(short='v', long)]
     nosummary: bool,
     #[arg(short='V', long)]
     zeroes: bool,
-    #[arg(short='c', long)]
+    #[arg(short='c', long="nocolors")]
     nocolors: bool,
     dir: String
 }
@@ -43,7 +41,7 @@ fn main() {
     let dir = args.dir;
     let all_results = scan_path(&dir, 10, HashSet::from(["/proc", "/sys"]));
     report(dir, all_results, FormatOptions {
-        human: args.human,
+        human: !args.raw,
         nosummary: args.nosummary,
         zeroes: args.zeroes,
         colors: !args.nocolors
