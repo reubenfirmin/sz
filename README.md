@@ -2,7 +2,7 @@
 
 ## About
 
-This is an improved version of `du`, with implementations in both Kotlin Native and Rust. It's intended to quickly 
+This is an improved version of `du`, with implementations in Kotlin Native, Rust, and Go. It's intended to quickly 
 answer the question that most of us probably use `du` for, i.e. "what the hell is using all my disk space"?
 
 It contains the following improvements:
