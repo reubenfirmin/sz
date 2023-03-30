@@ -14,8 +14,7 @@ use crate::view::report;
 use crate::view::FormatOptions;
 
 /**
- * NOTE - I ported the kotlin version to rust to start picking up the language. This is extremely
- * likely to not be idiomatic. (However, it works more or less identically.)
+ * A smarter, faster alternative to du. 
  */
 
 /**

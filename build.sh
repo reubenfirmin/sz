@@ -18,8 +18,11 @@ fi
 
 echo BUILDING GO
 
-if go build -o sz_go src/golang/*.go; then
+pushd src/golang
+if go build; then
 	echo Success!
+	popd
+	mv src/golang/sz ./sz_go
 else
 	echo Go build failed!
 fi

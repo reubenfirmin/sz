@@ -66,11 +66,9 @@ Improvement: option to roll up summaries by common directory.
 
 Improvement: better handling of formatting options.
 
-Challenge: write a Go version.
-
 (Not much of a) Challenge: for kicks, write a Kotlin/JVM version. 
 
-Challenge: refactor the Rust version to look better.
+Challenge: write a TUI in either Go or Rust, or maybe both.
 
 ## Building
 
@@ -80,19 +78,14 @@ apt install gcc-multilib
 sudo ./install.sh
 ```
 
-## Rust vs Kotlin Native
+## Rust vs Kotlin Native vs Go
 
 I wrote the Kotlin Native version first, because it's closest to what I'm familiar with (although it's still pretty 
 foreign). After getting it working, I was curious how close to the metal JetBrains had managed to get, and so hacked
 up the Rust version for comparison. The algorithms in both verions are currently identical, with minor differences in
 the thread pools; Rust has one, whereas I had to write one for Kotlin Native.
 
-The Kotlin Native version is currently the one which gets installed, even though it is slower than the Rust version 
-(by roughly 30%). Three reasons:
-
-1) This is the first Rust code I've written, and I'm sure it's not idiomatic. There may well be bugs.
-
-2) The Rust version is currently less tested than the Kotlin.
-
-3) The argument parser isn't as helpful in printing a usage message in the Rust version (this is because I turned off the help_usage in order to be able to use -h; I will fix this by making -h default.)
+I then started working on the Golang version (which is currently still in progress), which currently uses Goroutines rather than OS threads. 
+It also doesn't currently use a worker pool, and this I think is why it's slightly slower than the Rust version (but still
+faster than Kotlin).
 

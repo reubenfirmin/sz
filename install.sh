@@ -1,3 +1,3 @@
 #!/bin/bash
 
-cp ./sz_kn /usr/bin/sz
+cp ./sz_rs /usr/bin/sz
